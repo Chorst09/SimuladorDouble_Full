@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analisador de Editais e TDR</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.7.0/mammoth.browser.min.js"></script>
+<style>
+body { font-family: 'Inter', sans-serif; background-color: #0f172a; }
+.drop-zone { border: 2px dashed #475569; background-color: #1e293b; transition: all 0.3s ease; }
+.drop-zone-over { border-color: #6366f1; background-color: #334155; transform: scale(1.02); }
+.drop-zone:hover { border-color: #64748b; background-color: #334155; }
+.keyword-tag { background-color: #3730a3; color: #c7d2fe; font-weight: 500; }
+.result-card { background-color: #1e293b; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.2); }
+.loader { width: 40px; aspect-ratio: 1; border-radius: 50%; border: 6px solid #334155; border-right-color: #6366f1; animation: l2 1s infinite linear; }
+@keyframes l2 { to { transform: rotate(1turn) } }
+.analysis-option input:checked + label { border-color: #6366f1; background-color: #334155; color: #e0e7ff; }
+.analysis-option label { background-color: #1e293b; border-color: #475569; transition: all 0.2s; }
+.suggestion-card { border: 1px solid #334155; border-left: 4px solid #34d399; background-color: #0f172a; }
+</style>
+</head>
+<body class="antialiased text-slate-300">
+<div class="container mx-auto p-4 md:p-8">
+<header class="text-center mb-8">
+<h1 class="text-3xl md:text-4xl font-bold text-white">Analisador de Editais e TDR com IA</h1>
+<p class="mt-2 text-lg text-slate-400">Carregue um arquivo para uma análise inteligente e direcionada.</p>
+</header>
+
+<main id="main-content">
+<div id="upload-section" class="max-w-4xl mx-auto bg-slate-800 p-6 md:p-8 rounded-xl shadow-lg">
+<div id="drop-zone" class="drop-zone w-full rounded-lg p-10 text-center cursor-pointer">
+<input type="file" id="file-input" class="hidden" accept=".pdf,.docx,.PDF,.DOCX">
+<svg class="mx-auto h-12 w-12 text-slate-500" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+<path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<p id="drop-zone-text" class="mt-2 font-semibold text-slate-200">Arraste e solte o arquivo aqui</p>
+<p id="drop-zone-subtext" class="text-sm text-slate-400 mb-4">ou use o botão abaixo para selecionar (.pdf, .docx)</p>
+<button id="attach-file-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg transition-colors inline-flex items-center gap-2">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+</svg>
+Anexar Arquivo
+</button>
+</div>
+
+<div class="mt-8">
+<h3 class="text-xl font-semibold text-white text-center mb-8">Selecione o Tipo de Análise</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+<div class="analysis-option">
+<input type="radio" name="analysis_type" id="type_general" value="general" class="hidden" checked>
+<label for="type_general" class="block w-full p-8 border-2 border-indigo-500 bg-slate-800/50 rounded-xl cursor-pointer text-center hover:bg-slate-700/50 transition-all duration-200 h-full">
+<span class="font-bold text-xl block text-white mb-2">Análise Geral</span>
+<span class="text-slate-300">Extrai dados chave do edital.</span>
+</label>
+</div>
+
+<div class="analysis-option">
+<input type="radio" name="analysis_type" id="type_tdr" value="tdr" class="hidden">
+<label for="type_tdr" class="block w-full p-4 border-2 rounded-lg cursor-pointer text-center hover:border-indigo-500 h-full">
+<span class="font-bold block">Termo de Referência</span>
+<span class="text-sm text-slate-400">Resume itens e especificações.</span>
+</label>
+</div>
+
+<div class="analysis-option">
+<input type="radio" name="analysis_type" id="type_docs" value="docs" class="hidden">
+<label for="type_docs" class="block w-full p-4 border-2 rounded-lg cursor-pointer text-center hover:border-indigo-500 h-full">
+<span class="font-bold block">Documentação</span>
+<span class="text-sm text-slate-400">Extrai docs de habilitação (IA).</span>
+</label>
+</div>
+
+<div class="analysis-option">
+<input type="radio" name="analysis_type" id="type_products" value="products" class="hidden">
+<label for="type_products" class="block w-full p-4 border-2 rounded-lg cursor-pointer text-center hover:border-indigo-500 h-full">
+<span class="font-bold block">Análise de Produtos</span>
+<span class="text-sm text-slate-400">Extrai itens e sugere equipamentos.</span>
+</label>
+</div>
+</div>
+</div>
+
+<div class="mt-8 text-center">
+<button id="analyze-button" class="bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-500 transition-transform transform hover:scale-105 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed" disabled>
+Analisar Arquivo
+</button>
+</div>
+</div>
+
+<div id="loading-spinner" class="hidden flex-col items-center justify-center my-12">
+<div class="loader"></div>
+<p id="loading-text" class="mt-4 text-slate-400 font-medium">Analisando o documento... Por favor, aguarde.</p>
+<button id="cancel-analysis-button" class="mt-4 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-slate-700 transition inline-flex items-center gap-2">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+</svg>
+Voltar
+</button>
+</div>
+
+<div id="error-message" class="hidden max-w-3xl mx-auto mt-8 p-4 bg-red-900/50 border border-red-500 text-red-300 rounded-md"></div>
+
+<div id="results-section" class="hidden mt-10">
+<div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+<h2 class="text-2xl font-bold text-white">Resultados da Análise</h2>
+<div class="flex gap-2">
+<button id="back-button" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition inline-flex items-center gap-2">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+</svg>
+Voltar
+</button>
+<button id="print-button" class="bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-slate-500 transition">
+Imprimir Resumo
+</button>
+<button id="reset-button" class="bg-slate-700 text-slate-300 font-semibold py-2 px-4 rounded-lg hover:bg-slate-600 transition">
+Analisar Outro Arquivo
+</button>
+</div>
+</div>
+<div class="w-full max-w-4xl mx-auto">
+<div id="analysis-content" class="result-card p-6 rounded-xl">
+<h3 class="text-xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Resumo da Análise</h3>
+<div id="analysis-summary" class="space-y-4"></div>
+</div>
+</div>
+</div>
+</main>
+
+<footer class="text-center mt-12 text-sm text-slate-500">
+<p>&copy; 2024 Analisador de Editais. Todos os direitos reservados.</p>
+<p class="text-xs mt-1">As sugestões de produtos são geradas por IA e não constituem uma recomendação formal.</p>
+</footer>
+</div>
+
+<script>
+// Initialize PDF.js worker
+const pdfjsLib = window['pdfjs-dist/build/pdf'];
+if (pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    console.log('PDF.js carregado com sucesso');
+} else {
+    console.error('PDF.js não foi carregado');
+}
+
+// Check if Mammoth is loaded
+if (window.mammoth) {
+    console.log('Mammoth.js carregado com sucesso');
+} else {
+    console.error('Mammoth.js não foi carregado');
+}
+
+const appState = {
+    currentFile: null,
+    currentFileName: '',
+    displayedProductItems: [],
+    analysisResults: null,
+};
+
+const UIManager = {
+    elements: {
+        dropZone: document.getElementById('drop-zone'),
+        fileInput: document.getElementById('file-input'),
+        analyzeButton: document.getElementById('analyze-button'),
+        uploadSection: document.getElementById('upload-section'),
+        loadingSpinner: document.getElementById('loading-spinner'),
+        loadingText: document.getElementById('loading-text'),
+        resultsSection: document.getElementById('results-section'),
+        analysisSummaryEl: document.getElementById('analysis-summary'),
+        errorMessageEl: document.getElementById('error-message'),
+        resetButton: document.getElementById('reset-button'),
+        printButton: document.getElementById('print-button'),
+        backButton: document.getElementById('back-button'),
+        cancelAnalysisButton: document.getElementById('cancel-analysis-button'),
+        dropZoneText: document.getElementById('drop-zone-text'),
+        dropZoneSubtext: document.getElementById('drop-zone-subtext'),
+        attachFileBtn: document.getElementById('attach-file-btn'),
+    },
+
+    showLoading(message) {
+        this.elements.loadingText.textContent = message;
+        this.elements.uploadSection.classList.add('hidden');
+        this.elements.resultsSection.classList.add('hidden');
+        this.elements.loadingSpinner.classList.remove('hidden');
+        this.hideError();
+    },
+
+    hideLoading() {
+        this.elements.loadingSpinner.classList.add('hidden');
+    },
+
+    showResults() {
+        this.elements.resultsSection.classList.remove('hidden');
+    },
+
+    showError(message) {
+        this.elements.errorMessageEl.textContent = message;
+        this.elements.errorMessageEl.classList.remove('hidden');
+        this.elements.uploadSection.classList.remove('hidden');
+    },
+
+    hideError() {
+        this.elements.errorMessageEl.classList.add('hidden');
+    },
+
+    updateDropZoneWithFile(file) {
+        this.elements.dropZoneText.textContent = `✓ Arquivo selecionado: ${file.name}`;
+        this.elements.dropZoneSubtext.textContent = `Tamanho: ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+        this.elements.analyzeButton.disabled = false;
+        
+        // Update button text and style
+        if (this.elements.attachFileBtn) {
+            this.elements.attachFileBtn.innerHTML = `
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Arquivo Anexado
+            `;
+            this.elements.attachFileBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+            this.elements.attachFileBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+        }
+        
+        // Change drop zone appearance
+        this.elements.dropZone.classList.add('border-green-500', 'bg-green-900/20');
+        this.elements.dropZone.classList.remove('border-slate-500');
+    },
+
+    resetUI() {
+        this.elements.fileInput.value = '';
+        this.elements.analyzeButton.disabled = true;
+        this.elements.dropZoneText.textContent = 'Arraste e solte o arquivo aqui';
+        this.elements.dropZoneSubtext.textContent = 'ou use o botão abaixo para selecionar (.pdf, .docx)';
+        this.elements.uploadSection.classList.remove('hidden');
+        this.elements.resultsSection.classList.add('hidden');
+        
+        // Reset button appearance
+        if (this.elements.attachFileBtn) {
+            this.elements.attachFileBtn.innerHTML = `
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                </svg>
+                Anexar Arquivo
+            `;
+            this.elements.attachFileBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+            this.elements.attachFileBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+        }
+        
+        // Reset drop zone appearance
+        this.elements.dropZone.classList.remove('border-green-500', 'bg-green-900/20');
+        this.elements.dropZone.classList.add('border-slate-500');
+        
+        this.hideLoading();
+        this.hideError();
+    },
+
+    goBackToUpload() {
+        this.elements.resultsSection.classList.add('hidden');
+        this.elements.loadingSpinner.classList.add('hidden');
+        this.elements.uploadSection.classList.remove('hidden');
+        this.hideError();
+        
+        // Keep the file selected but allow user to change analysis type or upload new file
+        console.log('Voltando para a tela de upload');
+    },
+
+    renderResults(analysis) {
+        let summaryHtml = '';
+        appState.displayedProductItems = [];
+
+        if (analysis.type === 'docs') {
+            summaryHtml = this.renderers.documentation(analysis.summary.documentation);
+        } else if (analysis.type === 'products') {
+            summaryHtml = this.renderers.products(analysis.summary.items, analysis.type);
+        } else if (analysis.type === 'tdr') {
+            const standardSummary = { ...analysis.summary };
+            delete standardSummary.items;
+            summaryHtml = this.renderers.standard(standardSummary) + this.renderers.products(analysis.summary.items, analysis.type);
+        } else {
+            summaryHtml = this.renderers.standard(analysis.summary);
+        }
+
+        if (analysis.type !== 'tdr' && analysis.type !== 'products' && analysis.type !== 'docs') {
+            summaryHtml += this.renderers.otherData(analysis.otherData);
+        }
+
+        this.elements.analysisSummaryEl.innerHTML = summaryHtml;
+
+        if (!this.elements.analysisSummaryEl.innerHTML.trim()) {
+            this.elements.analysisSummaryEl.innerHTML = '<p class="text-slate-400 p-4 text-center">Nenhum item relevante foi encontrado.</p>';
+        }
+    },
+
+    renderers: {
+        documentation(documentation) {
+            if (!documentation || documentation.length === 0) {
+                return '<p class="text-slate-400 p-4 text-center">A IA não conseguiu extrair uma lista de documentos de habilitação.</p>';
+            }
+
+            return documentation.map(category => {
+                const documentsHtml = category.documentos.map(doc => 
+                    `<li class="p-3 bg-slate-900 rounded-lg border border-slate-700">
+                        <strong class="text-indigo-300">${this.htmlEncode(doc.nome)}</strong>
+                        <p class="text-sm text-slate-300 mt-1">${this.htmlEncode(doc.comprovacao)}</p>
+                    </li>`
+                ).join('');
+
+                return `<details class="result-block border border-slate-700 rounded-lg overflow-hidden" open>
+                    <summary class="font-semibold text-lg p-3 bg-slate-700/50 cursor-pointer hover:bg-slate-700 text-white">
+                        ${this.htmlEncode(category.categoria)}
+                    </summary>
+                    <ul class="space-y-2 p-3">${documentsHtml}</ul>
+                </details>`;
+            }).join('');
+        },
+
+        standard(summary) {
+            return Object.entries(summary).map(([category, items]) => {
+                if (!items || items.length === 0) return '';
+
+                let contentHtml;
+                if (category === 'Lotes e Itens do Edital') {
+                    contentHtml = `<div class="p-3 flex flex-wrap gap-2">
+                        ${items.map(title => `<span class="keyword-tag text-sm px-2 py-1 rounded-md">${title}</span>`).join('')}
+                    </div>`;
+                } else {
+                    const content = Array.isArray(items) ? items.map(k => k.context).join('<br><br>') : items;
+                    contentHtml = `<div class="p-4 text-sm text-slate-300 whitespace-pre-wrap">${this.htmlEncode(content)}</div>`;
+                }
+
+                return `<details class="result-block border border-slate-700 rounded-lg overflow-hidden" open>
+                    <summary class="font-semibold text-lg p-3 bg-slate-700/50 cursor-pointer hover:bg-slate-700 text-white">
+                        ${category}
+                    </summary>
+                    ${contentHtml}
+                </details>`;
+            }).join('');
+        },
+
+        products(items, type) {
+            if (!items || items.length === 0) {
+                return (type === 'products' || type === 'tdr') ? '' : '<p class="text-slate-400 p-4 text-center">Nenhum item com especificações foi encontrado.</p>';
+            }
+
+            const itemsHtml = items.map((item, index) => {
+                return `<div class="result-block border border-slate-700 rounded-lg overflow-hidden">
+                    <h4 class="font-semibold text-lg p-3 bg-indigo-900/50 text-indigo-200">${this.htmlEncode(item.title)}</h4>
+                    <div class="p-4">
+                        <div class="space-y-1 text-sm mb-4 whitespace-pre-wrap">${this.htmlEncode(item.description)}</div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            return itemsHtml;
+        },
+
+        otherData(otherData) {
+            return Object.entries(otherData).map(([title, items]) => {
+                if (items.length === 0) return '';
+                return `<div class="result-block border border-slate-700 rounded-lg p-3 mt-4">
+                    <h4 class="font-semibold text-lg text-white mb-2">💰 ${title}</h4>
+                    <div class="flex flex-wrap gap-2">
+                        ${items.map(item => `<span class="keyword-tag text-sm px-2 py-1 rounded-md">${item}</span>`).join('')}
+                    </div>
+                </div>`;
+            }).join('');
+        },
+
+        htmlEncode(str) {
+            if (typeof str !== 'string') return str;
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+    }
+};
+
+const FileProcessor = {
+    async parse(file) {
+        const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
+        if (isPdf) {
+            return this.parsePdf(file);
+        }
+        return this.parseDocx(file);
+    },
+
+    parseDocx: file => new Promise((resolve, reject) => {
+        console.log('Iniciando parse do DOCX:', file.name, 'Tamanho:', file.size);
+        
+        const reader = new FileReader();
+        reader.onload = e => {
+            console.log('Arquivo DOCX carregado, processando...');
+            mammoth.extractRawText({ arrayBuffer: e.target.result })
+                .then(r => {
+                    console.log('Texto extraído do DOCX, caracteres:', r.value.length);
+                    resolve(r.value);
+                })
+                .catch(error => {
+                    console.error('Erro ao processar DOCX:', error);
+                    reject(new Error(`Erro ao processar DOCX: ${error.message}. Verifique se o arquivo não está corrompido.`));
+                });
+        };
+        reader.onerror = () => {
+            const error = new Error('Erro ao ler o arquivo DOCX. Verifique se o arquivo não está corrompido.');
+            console.error('Erro no FileReader:', error);
+            reject(error);
+        };
+        reader.readAsArrayBuffer(file);
+    }),
+
+    async parsePdf(file) {
+        try {
+            console.log('Iniciando parse do PDF:', file.name, 'Tamanho:', file.size);
+            
+            const arrayBuffer = await file.arrayBuffer();
+            console.log('ArrayBuffer criado, tamanho:', arrayBuffer.byteLength);
+            
+            if (!window.pdfjsLib) {
+                throw new Error("Biblioteca PDF.js não carregou corretamente. Verifique sua conexão com a internet.");
+            }
+
+            const pdf = await window.pdfjsLib.getDocument(arrayBuffer).promise;
+            console.log('PDF carregado, páginas:', pdf.numPages);
+            
+            let fullText = '';
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                let lastY = -1;
+
+                textContent.items.forEach(item => {
+                    if (lastY !== -1 && item.transform[5] < lastY - 2) {
+                        fullText += '\n';
+                    }
+                    fullText += item.str;
+                    if (!item.str.endsWith(' ')) {
+                        fullText += ' ';
+                    }
+                    lastY = item.transform[5];
+                });
+                fullText += '\n\n';
+            }
+
+            const finalText = fullText.replace(/ \n/g, '\n').replace(/ +/g, ' ');
+            console.log('Texto extraído, caracteres:', finalText.length);
+            return finalText;
+        } catch (error) {
+            console.error('Erro ao processar PDF:', error);
+            throw new Error(`Erro ao processar PDF: ${error.message}. Verifique se o arquivo não está corrompido.`);
+        }
+    }
+};
+
+const AIService = {
+    async query(prompt, text, schema) {
+        // Simulação da API - retorna dados mockados para demonstração
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const analysisType = document.querySelector('input[name="analysis_type"]:checked').value;
+        
+        if (analysisType === 'docs') {
+            return {
+                documentacao: [
+                    {
+                        categoria: "Habilitação Jurídica",
+                        documentos: [
+                            { nome: "Contrato Social", comprovacao: "Cópia autenticada do contrato social registrado na Junta Comercial" },
+                            { nome: "Procuração", comprovacao: "Procuração com poderes específicos para participar da licitação" }
+                        ]
+                    },
+                    {
+                        categoria: "Regularidade Fiscal",
+                        documentos: [
+                            { nome: "CND Federal", comprovacao: "Certidão Negativa de Débitos Federais válida" },
+                            { nome: "CND Estadual", comprovacao: "Certidão Negativa de Débitos Estaduais válida" },
+                            { nome: "CND Municipal", comprovacao: "Certidão Negativa de Débitos Municipais válida" }
+                        ]
+                    },
+                    {
+                        categoria: "Regularidade Trabalhista",
+                        documentos: [
+                            { nome: "CNDT", comprovacao: "Certidão Negativa de Débitos Trabalhistas" },
+                            { nome: "CRF FGTS", comprovacao: "Certificado de Regularidade do FGTS" }
+                        ]
+                    }
+                ]
+            };
+        } else if (analysisType === 'products' || analysisType === 'tdr') {
+            return {
+                itens: [
+                    {
+                        title: "Servidor de Aplicação Rack 2U",
+                        description: "Servidor rack 2U com processador Intel Xeon Gold 6248R (24 cores, 3.0GHz), 64GB RAM DDR4 ECC, 2x SSD NVMe 1TB em RAID 1, fonte redundante 750W, 4 portas Gigabit Ethernet, controladora RAID integrada, sistema operacional Windows Server 2022 Standard."
+                    },
+                    {
+                        title: "Switch Gerenciável 48 Portas",
+                        description: "Switch gerenciável Layer 3 com 48 portas Gigabit Ethernet 10/100/1000, 4 portas SFP+ 10Gb, empilhamento, VLAN, QoS, SNMP v3, fonte redundante, rack 1U, garantia de 5 anos."
+                    },
+                    {
+                        title: "Storage SAN 24TB",
+                        description: "Sistema de armazenamento SAN com 24TB úteis, 12 discos SAS 15K RPM em RAID 6, controladora dupla ativa-ativa, 8GB cache por controladora, 8 portas FC 16Gb, replicação síncrona e assíncrona."
+                    }
+                ]
+            };
+        } else {
+            return {
+                objeto: "Contratação de equipamentos de tecnologia da informação para modernização da infraestrutura",
+                prazos: "Entrega: 60 dias corridos após assinatura do contrato. Instalação: 30 dias após entrega.",
+                valores: "Valor estimado total: R$ 2.500.000,00"
+            };
+        }
+    }
+};
+
+const AnalysisService = {
+    async analyzeText(text, type, structure) {
+        const results = { type: type, summary: {}, otherData: {} };
+
+        if (type === 'docs') {
+            const aiResult = await AIService.query('', text, {});
+            results.summary.documentation = aiResult.documentacao || [];
+        } else if (type === 'products') {
+            const aiResult = await AIService.query('', text, {});
+            results.summary.items = aiResult.itens || [];
+        } else if (type === 'tdr') {
+            const aiResult = await AIService.query('', text, {});
+            results.summary['Especificações Técnicas'] = structure.especificacoes_tecnicas || 'Seção não encontrada pela IA. Analisando o documento todo para encontrar itens.';
+            results.summary.items = aiResult.itens || [];
+        } else { // General
+            const aiResult = await AIService.query('', text, {});
+            results.summary['Objeto do Edital'] = aiResult.objeto || 'Não identificado';
+            results.summary['Prazos'] = aiResult.prazos || 'Não identificado';
+            results.summary['Valores Estimados'] = aiResult.valores || 'Não identificado';
+            results.summary['Lotes e Itens do Edital'] = this.findItemAndLotTitles(text);
+        }
+
+        // Extrair valores do texto
+        const valores = [...new Set(text.match(/R\$\s?[\d.,]+/g) || [])];
+        results.otherData['Valores Encontrados'] = valores;
+
+        return results;
+    },
+
+    findItemAndLotTitles(text) {
+        const regex = /\b(item|lote)\s+[\d.]+/gi;
+        const matches = text.match(regex);
+        return matches ? [...new Set(matches)] : [];
+    }
+};
+
+const AppController = {
+    init() {
+        const { dropZone, fileInput, analyzeButton, resetButton, printButton, attachFileBtn } = UIManager.elements;
+
+        // Drag & Drop functionality
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => 
+            dropZone.addEventListener(e, this.preventDefaults, false)
+        );
+
+        ['dragenter', 'dragover'].forEach(e => 
+            dropZone.addEventListener(e, () => dropZone.classList.add('drop-zone-over'), false)
+        );
+
+        ['dragleave', 'drop'].forEach(e => 
+            dropZone.addEventListener(e, () => dropZone.classList.remove('drop-zone-over'), false)
+        );
+
+        dropZone.addEventListener('drop', (e) => this.handleFileSelect(e.dataTransfer.files));
+        
+        // Click to select file (both drop zone and button)
+        dropZone.addEventListener('click', (e) => {
+            // Only trigger file input if clicking on the drop zone itself, not the button
+            if (e.target === dropZone || e.target.closest('#attach-file-btn') === null) {
+                fileInput.click();
+            }
+        });
+        
+        if (attachFileBtn) {
+            attachFileBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent dropZone click event
+                fileInput.click();
+            });
+        }
+
+        // File input change
+        fileInput.addEventListener('change', (e) => this.handleFileSelect(e.target.files));
+        
+        // Other buttons
+        analyzeButton.addEventListener('click', this.handleAnalysisRequest);
+        if (resetButton) resetButton.addEventListener('click', this.handleReset);
+        if (printButton) printButton.addEventListener('click', this.handlePrint);
+        
+        // Back buttons
+        const { backButton, cancelAnalysisButton } = UIManager.elements;
+        if (backButton) backButton.addEventListener('click', () => UIManager.goBackToUpload());
+        if (cancelAnalysisButton) cancelAnalysisButton.addEventListener('click', () => UIManager.goBackToUpload());
+    },
+
+    preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    },
+
+    handleFileSelect(files) {
+        if (!files || files.length === 0) {
+            console.log('Nenhum arquivo selecionado');
+            return;
+        }
+
+        const file = files[0];
+        console.log('Arquivo selecionado:', {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            lastModified: new Date(file.lastModified)
+        });
+
+        const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
+        const isDocx = file.type.includes('docx') || file.name.toLowerCase().endsWith('.docx');
+        
+        console.log('Validação de tipo:', { isPdf, isDocx });
+        
+        if (!file || (!isPdf && !isDocx)) {
+            const errorMsg = `Tipo de arquivo não suportado. Arquivo: ${file.name}, Tipo: ${file.type}. Use .pdf ou .docx.`;
+            console.error(errorMsg);
+            UIManager.showError(errorMsg);
+            return;
+        }
+
+        UIManager.hideError();
+        appState.currentFile = file;
+        appState.currentFileName = file.name;
+        
+        // Add success animation
+        UIManager.elements.dropZone.style.transform = 'scale(0.98)';
+        setTimeout(() => {
+            UIManager.elements.dropZone.style.transform = 'scale(1)';
+            UIManager.updateDropZoneWithFile(file);
+        }, 150);
+        
+        console.log('Arquivo aceito e armazenado');
+    },
+
+    async handleAnalysisRequest() {
+        if (!appState.currentFile) return;
+
+        const analysisType = document.querySelector('input[name="analysis_type"]:checked').value;
+        UIManager.showLoading(analysisType === 'docs' ? 'Analisando documentação com IA...' : 'Estruturando o documento com IA...');
+
+        try {
+            const text = await FileProcessor.parse(appState.currentFile);
+            if (!text.trim()) throw new Error("Não foi possível extrair texto do arquivo.");
+
+            const documentStructure = await AIService.query('', text, {});
+            
+            UIManager.showLoading(`Executando Análise de ${analysisType}...`);
+            appState.analysisResults = await AnalysisService.analyzeText(text, analysisType, documentStructure);
+
+            UIManager.renderResults(appState.analysisResults);
+            UIManager.hideLoading();
+            UIManager.showResults();
+        } catch (error) {
+            console.error("Erro ao processar arquivo:", error);
+            UIManager.showError(`Erro ao processar: ${error.message}`);
+            UIManager.hideLoading();
+        }
+    },
+
+    handleReset() {
+        appState.currentFile = null;
+        appState.currentFileName = '';
+        appState.displayedProductItems = [];
+        appState.analysisResults = null;
+        UIManager.resetUI();
+    },
+
+    handlePrint() {
+        const printContent = document.getElementById('analysis-content').innerHTML;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Análise de Edital - ${appState.currentFileName}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; margin: 20px; }
+                        .result-block { margin-bottom: 20px; border: 1px solid #ccc; padding: 15px; }
+                        .keyword-tag { background-color: #e0e7ff; padding: 2px 8px; margin: 2px; border-radius: 4px; }
+                        .suggestion-card { border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
+                    </style>
+                </head>
+                <body>
+                    <h1>Análise de Edital - ${appState.currentFileName}</h1>
+                    ${printContent}
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+    }
+};
+
+// Initialize the application when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM carregado, inicializando aplicação...');
+    AppController.init();
+    console.log('Aplicação inicializada com sucesso!');
+});
+</script>
+</body>
+</html>

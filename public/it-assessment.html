@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Assessment de TI (com Salvar/Imprimir)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+body {
+font-family: 'Inter', sans-serif;
+}
+.step {
+transition: all 0.3s ease;
+}
+.step-active {
+background-color: #4338ca !important; /* indigo-700 */
+color: white !important;
+border-color: #4338ca !important;
+}
+.step-completed {
+background-color: #16a34a !important; /* green-600 */
+color: white !important;
+border-color: #16a34a !important;
+}
+.phase-content {
+display: none;
+}
+.phase-content-active {
+display: block;
+}
+.modal {
+display: none;
+}
+.modal-active {
+display: flex;
+}
+.survey-form {
+display: none;
+}
+/* Custom scrollbar */
+::-webkit-scrollbar {
+width: 8px;
+}
+::-webkit-scrollbar-track {
+background: #1e293b; /* slate-800 */
+}
+::-webkit-scrollbar-thumb {
+background: #475569; /* slate-600 */
+border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+background: #64748b; /* slate-500 */
+}
+/* Print styles */
+@media print {
+body * {
+visibility: hidden;
+}
+.printable-section, .printable-section * {
+visibility: visible;
+}
+.printable-section {
+position: absolute;
+left: 0;
+top: 0;
+width: 100%;
+border: none;
+padding: 0;
+color: #000 !important;
+}
+.printable-section h2, .printable-section h3, .printable-section h4 {
+color: #000 !important;
+}
+.no-print {
+display: none;
+}
+}
+</style>
+</head>
+<body class="bg-slate-900 text-slate-200">
+<div class="container mx-auto p-4 md:p-8">
+<header class="text-center mb-8 no-print">
+<h1 class="text-3xl md:text-4xl font-bold text-slate-100">Sistema de Assessment de TI</h1>
+<p class="text-slate-400 mt-2">Um assistente interativo para guiar seu processo de avaliação de TI.</p>
+</header>
+
+<!-- Stepper Navigation -->
+<div id="stepper" class="flex flex-col md:flex-row items-center justify-between mb-8 space-y-4 md:space-y-0 no-print">
+<!-- Stepper steps will be dynamically generated here -->
+</div>
+
+<main id="phases-container" class="bg-slate-800 p-6 md:p-8 rounded-xl shadow-lg border border-slate-700">
+<!-- Phase 1: Planejamento e Escopo -->
+<div id="phase-1" class="phase-content phase-content-active">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+<div>
+<h2 class="text-2xl font-bold mb-1 text-indigo-400">Fase 1: Planejamento e Definição de Escopo</h2>
+<p class="text-slate-400">Defina a base do seu assessment. Objetivos claros e um escopo bem definido são cruciais.</p>
+</div>
+<div class="mt-4 md:mt-0">
+<span class="font-semibold text-lg">Assessment ID: </span>
+<span id="assessment-id-display" class="font-bold text-lg text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-md">Carregando...</span>
+</div>
+</div>
+
+<div class="no-print bg-slate-900/50 p-4 rounded-lg mb-6 flex flex-wrap gap-3 items-center">
+<button id="btn-novo" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-semibold flex items-center">
+<i class="fa-solid fa-file-circle-plus mr-2"></i>Novo
+</button>
+<button id="btn-salvar" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-semibold flex items-center">
+<i class="fa-solid fa-floppy-disk mr-2"></i>Salvar
+</button>
+<button id="btn-buscar" class="bg-slate-600 text-white px-4 py-2 rounded-lg hover:bg-slate-700 font-semibold flex items-center">
+<i class="fa-solid fa-search mr-2"></i>Buscar
+</button>
+</div>
+
+<div class="space-y-6">
+<div>
+<label for="objetivos" class="block text-lg font-semibold text-slate-300 mb-2">1.1. Principais Objetivos</label>
+<textarea id="objetivos" rows="4" class="w-full p-3 bg-slate-700 border border-slate-600 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-400" placeholder="Ex: Reduzir custos operacionais em 15%, melhorar a postura de segurança..."></textarea>
+</div>
+<div>
+<label for="escopo" class="block text-lg font-semibold text-slate-300 mb-2">1.2. Escopo do Assessment</label>
+<textarea id="escopo" rows="4" class="w-full p-3 bg-slate-700 border border-slate-600 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-400" placeholder="Ex: Avaliação completa da infraestrutura de rede e servidores..."></textarea>
+</div>
+</div>
+</div>
+
+<!-- Phase 2: Coleta de Dados -->
+<div id="phase-2" class="phase-content">
+<h2 class="text-2xl font-bold mb-1 text-indigo-400">Fase 2: Coleta de Dados</h2>
+<p class="text-slate-400 mb-6">Selecione os métodos e áreas para coletar as informações.</p>
+
+<div class="grid md:grid-cols-2 gap-8">
+<div>
+<h3 class="text-lg font-semibold text-slate-300 mb-3">2.1. Métodos de Coleta</h3>
+<div id="metodos-coleta" class="space-y-2">
+<label class="flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer">
+<input type="checkbox" data-key="entrevistas" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+Entrevistas com equipe e gestores
+</label>
+<label class="flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer">
+<input type="checkbox" data-key="questionarios" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+Questionários e Surveys
+</label>
+<label class="flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer">
+<input type="checkbox" data-key="documentacao" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+Análise de Documentação
+</label>
+<label class="flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer">
+<input type="checkbox" data-key="ferramentas" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+Uso de Ferramentas de Análise
+</label>
+</div>
+</div>
+
+<div>
+<h3 class="text-lg font-semibold text-slate-300 mb-3">2.2. Áreas de Análise</h3>
+<div id="areas-analise" class="space-y-2">
+<label class="flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer">
+<input type="checkbox" data-key="infra" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+Infraestrutura (Servidores, Redes)
+</label>
+<label class="flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer">
+<input type="checkbox" data-key="seguranca" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+Segurança da Informação
+</label>
+<label class="flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer">
+<input type="checkbox" data-key="software" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+Software e Aplicações
+</label>
+<label class="flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer">
+<input type="checkbox" data-key="governanca" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+Governança e Processos de TI
+</label>
+<label class="flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer">
+<input type="checkbox" data-key="equipe" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+Equipe de TI
+</label>
+</div>
+</div>
+</div>
+
+<div class="mt-8 border-t border-slate-700 pt-6">
+<h3 class="text-lg font-semibold text-slate-300 mb-3">Ferramenta de Survey</h3>
+<button id="btn-toggle-survey" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-semibold flex items-center">
+<i class="fa-solid fa-list-check mr-2"></i>Criar / Ver Survey para Clientes
+</button>
+</div>
+
+<!-- Survey Form -->
+<div id="survey-form-container" class="survey-form mt-6 printable-section">
+<div class="bg-slate-700/50 p-6 rounded-lg border border-slate-700">
+<div class="flex justify-between items-start flex-wrap gap-4">
+<div>
+<h3 class="text-xl font-bold text-slate-200">Formulário de Survey - Satisfação do Cliente de TI</h3>
+<p class="text-sm text-slate-400">Use este formulário para coletar feedback dos usuários.</p>
+</div>
+<div class="flex gap-2 no-print">
+<button id="btn-save-survey" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-semibold flex items-center">
+<i class="fa-solid fa-floppy-disk mr-2"></i>Salvar Survey
+</button>
+<button id="btn-print-survey" class="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 font-semibold flex items-center">
+<i class="fa-solid fa-print mr-2"></i>Imprimir Survey
+</button>
+</div>
+</div>
+
+<div id="survey-form-fields" class="mt-6 space-y-8">
+<fieldset class="border-t border-slate-600 pt-4">
+<legend class="text-lg font-semibold text-slate-300 px-2">Informações do Entrevistado</legend>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+<div>
+<label for="survey-name" class="block text-sm font-medium text-slate-400">Nome (Opcional)</label>
+<input type="text" id="survey-name" class="mt-1 block w-full p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-md shadow-sm">
+</div>
+<div>
+<label for="survey-department" class="block text-sm font-medium text-slate-400">Departamento / Cargo</label>
+<input type="text" id="survey-department" class="mt-1 block w-full p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-md shadow-sm">
+</div>
+</div>
+</fieldset>
+
+<fieldset class="border-t border-slate-600 pt-4">
+<legend class="text-lg font-semibold text-slate-300 px-2">Satisfação Geral com os Serviços de TI</legend>
+<p class="text-sm text-slate-400 mb-4">Em uma escala de 1 (Muito Insatisfeito) a 5 (Muito Satisfeito), como você avalia:</p>
+<div class="space-y-4">
+<div class="grid grid-cols-12 items-center gap-2">
+<span class="col-span-12 md:col-span-4 font-medium text-slate-300">O suporte técnico (Help Desk)</span>
+<div class="col-span-12 md:col-span-8 flex justify-around items-center bg-slate-800 p-2 rounded-lg">
+<label class="flex flex-col items-center">
+<input type="radio" name="suporte" value="1" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">1</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="suporte" value="2" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">2</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="suporte" value="3" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">3</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="suporte" value="4" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">4</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="suporte" value="5" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">5</span>
+</label>
+</div>
+</div>
+
+<div class="grid grid-cols-12 items-center gap-2">
+<span class="col-span-12 md:col-span-4 font-medium text-slate-300">A velocidade e estabilidade da rede</span>
+<div class="col-span-12 md:col-span-8 flex justify-around items-center bg-slate-800 p-2 rounded-lg">
+<label class="flex flex-col items-center">
+<input type="radio" name="rede" value="1" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">1</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="rede" value="2" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">2</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="rede" value="3" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">3</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="rede" value="4" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">4</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="rede" value="5" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">5</span>
+</label>
+</div>
+</div>
+
+<div class="grid grid-cols-12 items-center gap-2">
+<span class="col-span-12 md:col-span-4 font-medium text-slate-300">A qualidade dos sistemas (ERP, CRM, etc.)</span>
+<div class="col-span-12 md:col-span-8 flex justify-around items-center bg-slate-800 p-2 rounded-lg">
+<label class="flex flex-col items-center">
+<input type="radio" name="sistemas" value="1" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">1</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="sistemas" value="2" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">2</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="sistemas" value="3" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">3</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="sistemas" value="4" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">4</span>
+</label>
+<label class="flex flex-col items-center">
+<input type="radio" name="sistemas" value="5" class="h-4 w-4 text-indigo-500"> 
+<span class="text-xs mt-1">5</span>
+</label>
+</div>
+</div>
+</div>
+</fieldset>
+
+<fieldset class="border-t border-slate-600 pt-4">
+<legend class="text-lg font-semibold text-slate-300 px-2">Perguntas Específicas</legend>
+<div class="space-y-3 mt-2">
+<div class="flex items-center justify-between bg-slate-800 p-3 rounded-lg">
+<span class="font-medium text-slate-300">Você considera que os computadores e equipamentos são adequados para o seu trabalho?</span>
+<div class="flex gap-4">
+<label><input type="radio" name="equipamentos" value="sim" class="mr-1 text-indigo-500"> Sim</label>
+<label><input type="radio" name="equipamentos" value="nao" class="mr-1 text-indigo-500"> Não</label>
+</div>
+</div>
+<div class="flex items-center justify-between bg-slate-800 p-3 rounded-lg">
+<span class="font-medium text-slate-300">Você já perdeu dados importantes por falhas de backup ou sistema?</span>
+<div class="flex gap-4">
+<label><input type="radio" name="backup" value="sim" class="mr-1 text-indigo-500"> Sim</label>
+<label><input type="radio" name="backup" value="nao" class="mr-1 text-indigo-500"> Não</label>
+</div>
+</div>
+</div>
+</fieldset>
+
+<fieldset class="border-t border-slate-600 pt-4">
+<legend class="text-lg font-semibold text-slate-300 px-2">Comentários e Sugestões</legend>
+<div>
+<label for="survey-suggestions" class="block text-sm font-medium text-slate-400 mt-2">Quais são os principais desafios de TI que você enfrenta no seu dia a dia?</label>
+<textarea id="survey-suggestions" rows="3" class="mt-1 block w-full p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-md shadow-sm"></textarea>
+</div>
+<div>
+<label for="survey-improvements" class="block text-sm font-medium text-slate-400 mt-2">Que melhorias você gostaria de ver nos serviços ou sistemas de TI?</label>
+<textarea id="survey-improvements" rows="3" class="mt-1 block w-full p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-md shadow-sm"></textarea>
+</div>
+</fieldset>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Phase 3: Análise e Diagnóstico -->
+<div id="phase-3" class="phase-content">
+<h2 class="text-2xl font-bold mb-1 text-indigo-400">Fase 3: Análise e Diagnóstico</h2>
+<p class="text-slate-400 mb-6">Organize os dados coletados. Use a análise SWOT para começar.</p>
+
+<div class="grid md:grid-cols-2 gap-6">
+<div class="bg-green-500/10 p-4 rounded-lg border border-green-500/20">
+<h3 class="text-lg font-semibold text-green-400 mb-2">Forças</h3>
+<div id="swot-strengths" class="space-y-2"></div>
+<div class="flex mt-2">
+<input type="text" id="swot-strengths-input" class="w-full p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-l-lg placeholder-slate-400" placeholder="Adicionar ponto forte...">
+<button id="btn-add-strength" class="bg-green-600 text-white p-2 rounded-r-lg hover:bg-green-700">
+<i class="fa fa-plus"></i>
+</button>
+</div>
+</div>
+
+<div class="bg-red-500/10 p-4 rounded-lg border border-red-500/20">
+<h3 class="text-lg font-semibold text-red-400 mb-2">Fraquezas</h3>
+<div id="swot-weaknesses" class="space-y-2"></div>
+<div class="flex mt-2">
+<input type="text" id="swot-weaknesses-input" class="w-full p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-l-lg placeholder-slate-400" placeholder="Adicionar ponto fraco...">
+<button id="btn-add-weakness" class="bg-red-600 text-white p-2 rounded-r-lg hover:bg-red-700">
+<i class="fa fa-plus"></i>
+</button>
+</div>
+</div>
+
+<div class="bg-indigo-500/10 p-4 rounded-lg border border-indigo-500/20">
+<h3 class="text-lg font-semibold text-indigo-400 mb-2">Oportunidades</h3>
+<div id="swot-opportunities" class="space-y-2"></div>
+<div class="flex mt-2">
+<input type="text" id="swot-opportunities-input" class="w-full p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-l-lg placeholder-slate-400" placeholder="Adicionar oportunidade...">
+<button id="btn-add-opportunity" class="bg-indigo-600 text-white p-2 rounded-r-lg hover:bg-indigo-700">
+<i class="fa fa-plus"></i>
+</button>
+</div>
+</div>
+
+<div class="bg-yellow-500/10 p-4 rounded-lg border border-yellow-500/20">
+<h3 class="text-lg font-semibold text-yellow-400 mb-2">Ameaças</h3>
+<div id="swot-threats" class="space-y-2"></div>
+<div class="flex mt-2">
+<input type="text" id="swot-threats-input" class="w-full p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-l-lg placeholder-slate-400" placeholder="Adicionar ameaça...">
+<button id="btn-add-threat" class="bg-yellow-500 text-white p-2 rounded-r-lg hover:bg-yellow-600">
+<i class="fa fa-plus"></i>
+</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Phase 4: Recomendações e Roadmap -->
+<div id="phase-4" class="phase-content">
+<h2 class="text-2xl font-bold mb-1 text-indigo-400">Fase 4: Recomendações e Roadmap</h2>
+<p class="text-slate-400 mb-6">Traduza a análise em um plano de ação concreto.</p>
+
+<div>
+<h3 class="text-lg font-semibold text-slate-300 mb-3">4.1. Plano de Ação</h3>
+<div class="flex items-center space-x-2 mb-4">
+<input type="text" id="recommendation-input" class="w-full p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-lg placeholder-slate-400" placeholder="Nova recomendação...">
+<select id="priority-input" class="p-2 bg-slate-700 border border-slate-600 text-slate-100 rounded-lg">
+<option value="alta">Alta Prioridade</option>
+<option value="media">Média Prioridade</option>
+<option value="baixa">Baixa Prioridade</option>
+</select>
+<button id="btn-add-recommendation" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-semibold">Adicionar</button>
+</div>
+<div id="recommendations-list" class="space-y-3"></div>
+</div>
+</div>
+
+<!-- Phase 5: Revisão Final -->
+<div id="phase-5" class="phase-content">
+<h2 class="text-2xl font-bold mb-1 text-indigo-400">Fase 5: Revisão Final</h2>
+<p class="text-slate-400 mb-6">Esta é a última etapa antes da finalização. Revise todas as informações inseridas nas fases anteriores. Na próxima fase, você poderá gerar o relatório final e concluir o assessment.</p>
+
+<div class="bg-indigo-500/10 border-l-4 border-indigo-500 text-indigo-300 p-4 rounded-md" role="alert">
+<p class="font-bold">Próximo Passo</p>
+<p>Clique em "Próximo" para avançar para a fase de Finalização e Relatório.</p>
+</div>
+</div>
+
+<!-- Phase 6: Finalização e Relatório -->
+<div id="phase-6" class="phase-content">
+<h2 class="text-2xl font-bold mb-1 text-indigo-400">Fase 6: Finalização e Relatório</h2>
+<p class="text-slate-400 mb-6">Defina os próximos passos, monitore os resultados e gere o relatório final do assessment.</p>
+
+<div>
+<h3 class="text-lg font-semibold text-slate-300 mb-3">6.1. Ações do Roadmap para Implementação</h3>
+<div id="implementation-checklist" class="space-y-2"></div>
+
+<h3 class="text-lg font-semibold text-slate-300 mt-8 mb-3">6.2. KPIs para Monitoramento</h3>
+<textarea id="kpis" rows="4" class="w-full p-3 bg-slate-700 border border-slate-600 text-slate-100 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-400" placeholder="Ex: Redução de 10% nos tickets de suporte..."></textarea>
+</div>
+
+<div class="mt-8 border-t border-slate-700 pt-6">
+<h3 class="text-lg font-semibold text-slate-300 mb-3">Relatório Final do Assessment</h3>
+<div id="summary-report" class="space-y-6 bg-slate-700/50 p-6 rounded-lg border border-slate-700 printable-section">
+<p class="text-slate-400">Clique em "Gerar/Atualizar Resumo" para ver o relatório consolidado aqui.</p>
+</div>
+<div class="mt-6 flex gap-3 no-print">
+<button id="btn-generate-report" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 font-semibold flex items-center">
+<i class="fa-solid fa-arrows-rotate mr-2"></i>Gerar/Atualizar Resumo
+</button>
+<button id="btn-print-report" class="bg-teal-600 text-white px-6 py-2 rounded-lg hover:bg-teal-700 font-semibold flex items-center">
+<i class="fa-solid fa-print mr-2"></i>Imprimir Relatório
+</button>
+</div>
+</div>
+</div>
+
+<!-- Navigation Buttons -->
+<div class="flex justify-between mt-8 pt-6 border-t border-slate-700 no-print">
+<button id="prev-btn" class="bg-slate-600 text-white px-6 py-2 rounded-lg hover:bg-slate-700 font-semibold disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed">Anterior</button>
+<button id="next-btn" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 font-semibold">Próximo</button>
+</div>
+</main>
+</div>
+
+<!-- Modal de Busca -->
+<div id="search-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
+<div class="bg-slate-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-700">
+<div class="flex justify-between items-center p-4 border-b border-slate-700">
+<h3 class="text-xl font-bold text-slate-200">Buscar Assessment</h3>
+<button id="btn-close-search" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+</div>
+<div id="search-results" class="p-6 overflow-y-auto">
+<p>Buscando assessments...</p>
+</div>
+</div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="fixed bottom-5 right-5 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg opacity-0 transition-opacity duration-300">Salvo com sucesso!</div>
+
+<script type="module">
+// Firebase Imports
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+// --- FIREBASE CONFIG (DO NOT EDIT) ---
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { 
+    apiKey: "...", 
+    authDomain: "...", 
+    projectId: "..." 
+};
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-it-assessment';
+
+// --- APP INITIALIZATION ---
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+let userId = null;
+
+// State management
+let currentPhase = 1;
+const totalPhases = 6;
+let assessmentData = {};
+const collectionPath = `artifacts/${appId}/public/data/assessments`;
+
+// DOM elements
+const idDisplay = document.getElementById('assessment-id-display');
+
+// --- AUTHENTICATION ---
+onAuthStateChanged(auth, async (user) => {
+    if (user) {
+        userId = user.uid;
+        await novoAssessment();
+    }
+});
+
+async function initializeAuth() {
+    try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+            await signInAnonymously(auth);
+        }
+    } catch (error) {
+        console.error("Authentication failed:", error);
+    }
+}
+
+// --- CORE FUNCTIONS ---
+async function novoAssessment() {
+    if (!userId) { 
+        alert("Aguardando autenticação..."); 
+        return; 
+    }
+    
+    idDisplay.textContent = "Gerando...";
+    
+    const currentYear = new Date().getFullYear();
+    const q = query(collection(db, collectionPath), where("year", "==", currentYear));
+    const querySnapshot = await getDocs(q);
+    
+    let maxSequence = 0;
+    querySnapshot.forEach(doc => {
+        if (doc.data().sequence > maxSequence) {
+            maxSequence = doc.data().sequence;
+        }
+    });
+    
+    const newSequence = maxSequence + 1;
+    const newId = `${String(newSequence).padStart(4, '0')}/${currentYear}`;
+    
+    resetForm();
+    
+    assessmentData = {
+        id: newId,
+        sequence: newSequence,
+        year: currentYear,
+        createdBy: userId,
+        createdAt: Timestamp.now(),
+        data: {
+            phase1: { objetivos: '', escopo: '' },
+            phase2: { metodos: {}, areas: {}, survey: {} },
+            phase3: { strengths: [], weaknesses: [], opportunities: [], threats: [] },
+            phase4: { recommendations: [] },
+            phase6: { kpis: '' }
+        }
+    };
+    
+    idDisplay.textContent = newId;
+    goToPhase(1, true);
+}
+
+async function salvarAssessment() {
+    if (!assessmentData || !assessmentData.id) {
+        alert("Nenhum assessment ativo. Crie um novo primeiro.");
+        return;
+    }
+    
+    collectFormData();
+    assessmentData.updatedAt = Timestamp.now();
+    
+    const docRef = doc(db, collectionPath, assessmentData.id.replace('/', '-'));
+    
+    try {
+        await setDoc(docRef, assessmentData);
+        showToast("Salvo com sucesso!");
+    } catch (error) {
+        console.error("Erro ao salvar:", error);
+        showToast("Erro ao salvar!", true);
+    }
+}
+
+async function abrirModalBusca() {
+    const modal = document.getElementById('search-modal');
+    const resultsContainer = document.getElementById('search-results');
+    
+    resultsContainer.innerHTML = '<p class="text-center">Buscando...</p>';
+    modal.classList.add('modal-active');
+    
+    try {
+        const querySnapshot = await getDocs(collection(db, collectionPath));
+        
+        if (querySnapshot.empty) {
+            resultsContainer.innerHTML = '<p class="text-center text-slate-400">Nenhum assessment encontrado.</p>';
+            return;
+        }
+        
+        resultsContainer.innerHTML = '';
+        const assessments = [];
+        querySnapshot.forEach(doc => assessments.push(doc.data()));
+        
+        assessments.sort((a,b) => {
+            if (a.year !== b.year) return b.year - a.year;
+            return b.sequence - a.sequence;
+        });
+        
+        assessments.forEach(data => {
+            const div = document.createElement('div');
+            div.className = 'p-3 mb-2 border border-slate-700 rounded-lg hover:bg-slate-700 cursor-pointer';
+            div.innerHTML = `
+                <span class="font-bold text-indigo-400">${data.id}</span>
+                <p class="text-sm text-slate-400 truncate">${data.data.phase1.objetivos || 'Sem objetivos definidos'}</p>
+            `;
+            div.addEventListener('click', () => carregarAssessment(data.id));
+            resultsContainer.appendChild(div);
+        });
+    } catch (error) {
+        console.error("Erro ao buscar:", error);
+        resultsContainer.innerHTML = '<p class="text-center text-red-400">Ocorreu um erro ao buscar os dados.</p>';
+    }
+}
+
+function fecharModalBusca() {
+    document.getElementById('search-modal').classList.remove('modal-active');
+}
+
+async function carregarAssessment(id) {
+    const docRef = doc(db, collectionPath, id.replace('/', '-'));
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+        assessmentData = docSnap.data();
+        populateForm();
+        goToPhase(1, true);
+        fecharModalBusca();
+    } else {
+        alert("Assessment não encontrado!");
+    }
+}
+
+// --- UI & HELPER FUNCTIONS ---
+function resetForm() {
+    const formIds = ['objetivos', 'escopo', 'kpis'];
+    formIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    
+    document.querySelectorAll('#metodos-coleta input, #areas-analise input').forEach(c => c.checked = false);
+    
+    const surveyForm = document.getElementById('survey-form-fields');
+    if (surveyForm) {
+        surveyForm.querySelectorAll('input[type="text"], textarea').forEach(input => input.value = '');
+        surveyForm.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
+    }
+    
+    assessmentData = {};
+    renderSwotItems();
+    renderRecommendations();
+}
+
+function collectFormData() {
+    if (!assessmentData.data) return;
+    
+    assessmentData.data.phase1.objetivos = document.getElementById('objetivos').value;
+    assessmentData.data.phase1.escopo = document.getElementById('escopo').value;
+    assessmentData.data.phase6.kpis = document.getElementById('kpis').value;
+    
+    assessmentData.data.phase2.metodos = {};
+    document.querySelectorAll('#metodos-coleta input').forEach(c => {
+        assessmentData.data.phase2.metodos[c.dataset.key] = c.checked;
+    });
+    
+    assessmentData.data.phase2.areas = {};
+    document.querySelectorAll('#areas-analise input').forEach(c => {
+        assessmentData.data.phase2.areas[c.dataset.key] = c.checked;
+    });
+    
+    const surveyData = {};
+    const surveyForm = document.getElementById('survey-form-fields');
+    if (surveyForm) {
+        surveyData.name = document.getElementById('survey-name').value;
+        surveyData.department = document.getElementById('survey-department').value;
+        surveyData.suggestions = document.getElementById('survey-suggestions').value;
+        surveyData.improvements = document.getElementById('survey-improvements').value;
+        
+        surveyForm.querySelectorAll('input[type="radio"]:checked').forEach(radio => {
+            surveyData[radio.name] = radio.value;
+        });
+    }
+    assessmentData.data.phase2.survey = surveyData;
+}
+
+function populateForm() {
+    const data = assessmentData.data;
+    
+    idDisplay.textContent = assessmentData.id;
+    document.getElementById('objetivos').value = data.phase1.objetivos || '';
+    document.getElementById('escopo').value = data.phase1.escopo || '';
+    document.getElementById('kpis').value = data.phase6.kpis || '';
+    
+    if (data.phase2) {
+        if(data.phase2.metodos) Object.keys(data.phase2.metodos).forEach(key => {
+            const el = document.querySelector(`#metodos-coleta input[data-key="${key}"]`);
+            if(el) el.checked = data.phase2.metodos[key];
+        });
+        
+        if(data.phase2.areas) Object.keys(data.phase2.areas).forEach(key => {
+            const el = document.querySelector(`#areas-analise input[data-key="${key}"]`);
+            if(el) el.checked = data.phase2.areas[key];
+        });
+        
+        if (data.phase2.survey) {
+            const survey = data.phase2.survey;
+            document.getElementById('survey-name').value = survey.name || '';
+            document.getElementById('survey-department').value = survey.department || '';
+            document.getElementById('survey-suggestions').value = survey.suggestions || '';
+            document.getElementById('survey-improvements').value = survey.improvements || '';
+            
+            Object.keys(survey).forEach(key => {
+                const radio = document.querySelector(`#survey-form-fields input[name="${key}"][value="${survey[key]}"]`);
+                if (radio) radio.checked = true;
+            });
+        }
+    }
+    
+    renderSwotItems();
+    renderRecommendations();
+}
+
+function goToPhase(phase, resetStepper = false) {
+    if (resetStepper) {
+        document.querySelectorAll('.step').forEach(step => step.classList.remove('step-completed'));
+        document.getElementById('prev-btn').disabled = false;
+        document.getElementById('next-btn').disabled = false;
+    } else if (phase > currentPhase) {
+        const stepEl = document.getElementById(`step-${currentPhase}`);
+        if (stepEl) stepEl.classList.add('step-completed');
+    }
+    
+    currentPhase = phase;
+    updateUI();
+}
+
+function navigate(direction) {
+    const newPhase = currentPhase + direction;
+    if (newPhase >= 1 && newPhase <= totalPhases) {
+        goToPhase(newPhase);
+    }
+}
+
+function updateUI() {
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    
+    document.querySelectorAll('.phase-content').forEach(p => p.classList.remove('phase-content-active'));
+    const activePhaseEl = document.getElementById(`phase-${currentPhase}`);
+    if (activePhaseEl) activePhaseEl.classList.add('phase-content-active');
+    
+    document.querySelectorAll('.step').forEach((step, index) => {
+        const phaseNum = index + 1;
+        step.classList.remove('step-active');
+        if (phaseNum === currentPhase) step.classList.add('step-active');
+    });
+    
+    if (prevBtn) prevBtn.disabled = currentPhase === 1;
+    if (nextBtn) {
+        nextBtn.textContent = currentPhase === totalPhases ? 'Finalizar Assessment' : 'Próximo';
+    }
+    
+    if (currentPhase === 6) {
+        generateImplementationChecklist();
+        generateReport();
+    }
+}
+
+function finalizarAssessment() {
+    showToast("Assessment finalizado com sucesso!", false);
+    document.getElementById('prev-btn').disabled = true;
+    document.getElementById('next-btn').disabled = true;
+}
+
+function addSwotItem(type) {
+    const input = document.getElementById(`swot-${type}-input`);
+    const value = input.value.trim();
+    if (value) {
+        if (!assessmentData.data.phase3[type]) assessmentData.data.phase3[type] = [];
+        assessmentData.data.phase3[type].push(value);
+        renderSwotItems();
+        input.value = '';
+    }
+}
+
+function removeSwotItem(type, index) {
+    assessmentData.data.phase3[type].splice(index, 1);
+    renderSwotItems();
+}
+
+function renderSwotItems() {
+    if (!assessmentData.data) return;
+    
+    ['strengths', 'weaknesses', 'opportunities', 'threats'].forEach(type => {
+        const container = document.getElementById(`swot-${type}`);
+        if (!container) return;
+        
+        container.innerHTML = '';
+        const items = assessmentData.data.phase3[type] || [];
+        
+        items.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between bg-slate-700 p-2 rounded-md shadow-sm';
+            
+            const span = document.createElement('span');
+            span.className = 'text-slate-200';
+            span.textContent = item;
+            
+            const button = document.createElement('button');
+            button.className = 'text-red-400 hover:text-red-500';
+            button.innerHTML = '<i class="fa fa-trash-alt"></i>';
+            button.addEventListener('click', () => removeSwotItem(type, index));
+            
+            div.appendChild(span);
+            div.appendChild(button);
+            container.appendChild(div);
+        });
+    });
+}
+
+function addRecommendation() {
+    const input = document.getElementById('recommendation-input');
+    const priority = document.getElementById('priority-input').value;
+    const text = input.value.trim();
+    
+    if (text) {
+        if (!assessmentData.data.phase4.recommendations) assessmentData.data.phase4.recommendations = [];
+        assessmentData.data.phase4.recommendations.push({ text, priority, id: Date.now() });
+        renderRecommendations();
+        input.value = '';
+    }
+}
+
+function removeRecommendation(id) {
+    assessmentData.data.phase4.recommendations = assessmentData.data.phase4.recommendations.filter(rec => rec.id !== id);
+    renderRecommendations();
+}
+
+function renderRecommendations() {
+    if (!assessmentData.data) return;
+    
+    const list = document.getElementById('recommendations-list');
+    if (!list) return;
+    
+    list.innerHTML = '';
+    const recommendations = assessmentData.data.phase4.recommendations || [];
+    
+    const priorityOrder = { 'alta': 1, 'media': 2, 'baixa': 3 };
+    const sorted = [...recommendations].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+    
+    sorted.forEach(rec => {
+        const priorityClasses = { 
+            alta: 'border-l-4 border-red-500', 
+            media: 'border-l-4 border-yellow-500', 
+            baixa: 'border-l-4 border-indigo-500' 
+        };
+        
+        const div = document.createElement('div');
+        div.className = `flex items-center justify-between bg-slate-700/50 p-3 rounded-lg ${priorityClasses[rec.priority]}`;
+        
+        const span = document.createElement('span');
+        span.className = 'text-slate-200';
+        span.textContent = rec.text;
+        
+        const button = document.createElement('button');
+        button.className = 'text-red-400 hover:text-red-500 ml-4';
+        button.innerHTML = '<i class="fa fa-trash-alt"></i>';
+        button.addEventListener('click', () => removeRecommendation(rec.id));
+        
+        div.appendChild(span);
+        div.appendChild(button);
+        list.appendChild(div);
+    });
+}
+
+function generateReport() {
+    collectFormData();
+    const container = document.getElementById('summary-report');
+    if (!assessmentData.data || !container) return;
+    
+    const data = assessmentData.data;
+    
+    let html = `
+        <div class="flex justify-between items-center">
+            <h3 class="text-xl font-semibold text-slate-200">Resumo do Assessment</h3>
+            <span class="font-bold text-lg text-indigo-400">${assessmentData.id}</span>
+        </div>
+        <p class="text-sm text-slate-400 no-print">Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
+        
+        <div class="border-t border-slate-700 pt-4 mt-4">
+            <h4 class="text-lg font-semibold text-indigo-400">Objetivos</h4>
+            <p class="text-slate-300 whitespace-pre-wrap">${data.phase1.objetivos || 'Nenhum objetivo definido.'}</p>
+        </div>
+        
+        <div class="border-t border-slate-700 pt-4 mt-4">
+            <h4 class="text-lg font-semibold text-indigo-400">Escopo</h4>
+            <p class="text-slate-300 whitespace-pre-wrap">${data.phase1.escopo || 'Nenhum escopo definido.'}</p>
+        </div>
+        
+        <div class="border-t border-slate-700 pt-4 mt-4">
+            <h4 class="text-lg font-semibold text-indigo-400">Análise SWOT</h4>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                <div>
+                    <strong>Forças:</strong>
+                    <ul class="list-disc list-inside">${(data.phase3.strengths || []).map(i => `<li>${i}</li>`).join('') || '<li>N/A</li>'}</ul>
+                </div>
+                <div>
+                    <strong>Fraquezas:</strong>
+                    <ul class="list-disc list-inside">${(data.phase3.weaknesses || []).map(i => `<li>${i}</li>`).join('') || '<li>N/A</li>'}</ul>
+                </div>
+                <div>
+                    <strong>Oportunidades:</strong>
+                    <ul class="list-disc list-inside">${(data.phase3.opportunities || []).map(i => `<li>${i}</li>`).join('') || '<li>N/A</li>'}</ul>
+                </div>
+                <div>
+                    <strong>Ameaças:</strong>
+                    <ul class="list-disc list-inside">${(data.phase3.threats || []).map(i => `<li>${i}</li>`).join('') || '<li>N/A</li>'}</ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="border-t border-slate-700 pt-4 mt-4">
+            <h4 class="text-lg font-semibold text-indigo-400">Recomendações Priorizadas</h4>
+            <ul class="list-decimal list-inside">${(data.phase4.recommendations || []).map(r => `<li>[${r.priority.toUpperCase()}] ${r.text}</li>`).join('') || '<li>Nenhuma recomendação.</li>'}</ul>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+function generateImplementationChecklist() {
+    const container = document.getElementById('implementation-checklist');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    const recommendations = (assessmentData.data && assessmentData.data.phase4.recommendations) || [];
+    
+    if (recommendations.length === 0) {
+        container.innerHTML = '<p class="text-slate-400">Adicione recomendações na Fase 4.</p>';
+        return;
+    }
+    
+    recommendations.forEach(rec => {
+        const label = document.createElement('label');
+        label.className = 'flex items-center p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 cursor-pointer';
+        label.innerHTML = `
+            <input type="checkbox" class="h-5 w-5 rounded text-indigo-500 focus:ring-indigo-500 mr-3">
+            <span>[${rec.priority.toUpperCase()}] ${rec.text}</span>
+        `;
+        container.appendChild(label);
+    });
+}
+
+function imprimirPDF(sectionId) {
+    const reportSection = document.getElementById('summary-report');
+    const surveySection = document.getElementById('survey-form-container');
+    
+    if (reportSection) reportSection.classList.remove('printable-section');
+    if (surveySection) surveySection.classList.remove('printable-section');
+    
+    const sectionToPrint = document.getElementById(sectionId);
+    if (sectionToPrint) {
+        sectionToPrint.classList.add('printable-section');
+        if (sectionId === 'summary-report') {
+            generateReport();
+        }
+        window.print();
+    }
+}
+
+function showToast(message, isError = false) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = `fixed bottom-5 right-5 text-white px-6 py-3 rounded-lg shadow-lg transition-opacity duration-300 ${isError ? 'bg-red-500' : 'bg-green-500'}`;
+    toast.classList.remove('opacity-0');
+    setTimeout(() => {
+        toast.classList.add('opacity-0');
+    }, 3000);
+}
+
+function setupStepper() {
+    const stepperContainer = document.getElementById('stepper');
+    stepperContainer.innerHTML = '';
+    
+    for (let i = 1; i <= totalPhases; i++) {
+        const stepDiv = document.createElement('div');
+        stepDiv.id = `step-${i}`;
+        stepDiv.className = 'step bg-slate-700 text-slate-300 flex items-center justify-center w-10 h-10 border-2 border-slate-600 rounded-full font-bold cursor-pointer';
+        stepDiv.textContent = i;
+        stepDiv.addEventListener('click', () => goToPhase(i));
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex items-center w-full md:w-auto';
+        wrapper.appendChild(stepDiv);
+        
+        if (i < totalPhases) {
+            const line = document.createElement('div');
+            line.className = 'flex-auto border-t-2 border-slate-700 mx-2';
+            wrapper.appendChild(line);
+        }
+        
+        stepperContainer.appendChild(wrapper);
+    }
+}
+
+function addSafeEventListener(selector, event, handler) {
+    const element = document.getElementById(selector);
+    if (element) {
+        element.addEventListener(event, handler);
+    } else {
+        console.warn(`Element with ID "${selector}" not found.`);
+    }
+}
+
+function setupEventListeners() {
+    addSafeEventListener('btn-novo', 'click', novoAssessment);
+    addSafeEventListener('btn-salvar', 'click', salvarAssessment);
+    addSafeEventListener('btn-buscar', 'click', abrirModalBusca);
+    addSafeEventListener('btn-close-search', 'click', fecharModalBusca);
+    
+    addSafeEventListener('prev-btn', 'click', () => navigate(-1));
+    addSafeEventListener('next-btn', 'click', () => {
+        if (currentPhase === totalPhases) {
+            finalizarAssessment();
+        } else {
+            navigate(1);
+        }
+    });
+    
+    addSafeEventListener('btn-add-strength', 'click', () => addSwotItem('strengths'));
+    addSafeEventListener('btn-add-weakness', 'click', () => addSwotItem('weaknesses'));
+    addSafeEventListener('btn-add-opportunity', 'click', () => addSwotItem('opportunities'));
+    addSafeEventListener('btn-add-threat', 'click', () => addSwotItem('threats'));
+    
+    addSafeEventListener('btn-add-recommendation', 'click', addRecommendation);
+    addSafeEventListener('btn-generate-report', 'click', generateReport);
+    addSafeEventListener('btn-print-report', 'click', () => imprimirPDF('summary-report'));
+    
+    addSafeEventListener('btn-toggle-survey', 'click', () => {
+        const surveyContainer = document.getElementById('survey-form-container');
+        if (surveyContainer) surveyContainer.style.display = 'block';
+    });
+    
+    addSafeEventListener('btn-save-survey', 'click', salvarAssessment);
+    addSafeEventListener('btn-print-survey', 'click', () => imprimirPDF('survey-form-container'));
+    
+    ['strengths', 'weaknesses', 'opportunities', 'threats'].forEach(type => {
+        addSafeEventListener(`swot-${type}-input`, 'keypress', e => { 
+            if (e.key === 'Enter') addSwotItem(type); 
+        });
+    });
+    
+    addSafeEventListener('recommendation-input', 'keypress', e => { 
+        if (e.key === 'Enter') addRecommendation(); 
+    });
+}
+
+// --- INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+    setupStepper();
+    setupEventListeners();
+    initializeAuth();
+});
+</script>
+</body>
+</html>

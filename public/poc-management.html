@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Gerenciamento da PoC</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Chosen Palette: Dark Blue Theme -->
+<!-- Application Structure Plan: The application now starts with a PoC selection/creation view, establishing a multi-project workflow. The main view is a tabbed dashboard for the active PoC (Technologies, Test Plan, Results, Summary). This structure separates project management from the detailed work on a specific PoC, improving organization and scalability. Data management is handled via modals and automatic saving to localStorage. -->
+<!-- Visualization & Content Choices: - Report Info: PoC List. Goal: Manage multiple projects. Viz: Card-based list. Interaction: Click to load, button to create new. Justification: A card list is a standard and intuitive UI for selecting from a collection of items.- Report Info: PoC Summary. Goal: Consolidate and report final results. Viz: Styled HTML section with dynamic stats and a textarea for conclusions. Interaction: "Print" button now triggers direct PDF generation using jsPDF and html2canvas. Justification: This provides a much better user experience, creating a clean, shareable PDF artifact directly, fulfilling a key business need.-->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+<style>
+body { 
+    font-family: 'Inter', sans-serif; 
+    background-color: #0f172a; 
+    color: #cbd5e1; 
+} /* bg-slate-900, text-slate-300 */
+
+.chart-container { 
+    position: relative; 
+    width: 100%; 
+    max-width: 800px; 
+    margin-left: auto; 
+    margin-right: auto; 
+    height: 400px; 
+    max-height: 50vh; 
+}
+
+@media (min-width: 768px) { 
+    .chart-container { 
+        height: 450px; 
+    } 
+}
+
+.nav-btn { 
+    transition: all 0.3s ease; 
+}
+
+.nav-btn.active { 
+    background-color: #2563eb; 
+    color: white; 
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); 
+}
+
+.content-section, .view { 
+    display: none; 
+    animation: fadeIn 0.5s ease-in-out; 
+}
+
+.content-section.active, .view.active { 
+    display: block; 
+}
+
+@keyframes fadeIn { 
+    from { 
+        opacity: 0; 
+        transform: translateY(10px); 
+    } 
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    } 
+}
+
+.modal-overlay { 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0; 
+    background-color: rgba(0, 0, 0, 0.7); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    z-index: 50; 
+    opacity: 0; 
+    visibility: hidden; 
+    transition: all 0.3s ease; 
+}
+
+.modal-overlay.visible { 
+    opacity: 1; 
+    visibility: visible; 
+}
+
+.modal-content { 
+    background-color: #1e293b; 
+    color: #e2e8f0; 
+    padding: 2rem; 
+    border-radius: 0.75rem; 
+    width: 90%; 
+    max-width: 500px; 
+    transform: scale(0.95); 
+    transition: all 0.3s ease; 
+    border: 1px solid #334155; 
+}
+
+.modal-overlay.visible .modal-content { 
+    transform: scale(1); 
+}
+
+.form-input { 
+    background-color: #334155; 
+    border-color: #475569; 
+    color: #f1f5f9; 
+}
+
+.form-input:focus { 
+    border-color: #2563eb; 
+    ring: 1; 
+    ring-color: #2563eb; 
+}
+</style>
+</head>
+<body class="text-slate-300">
+
+<div id="poc-selection-view" class="view active">
+<div class="container mx-auto p-4 md:p-8">
+<header class="text-center mb-8">
+<h1 class="text-3xl md:text-4xl font-bold text-slate-100">Sistema de Gerenciamento de PoC</h1>
+<p class="text-slate-400 mt-2">Selecione uma Prova de Conceito para continuar ou crie uma nova.</p>
+</header>
+
+<div class="flex justify-center mb-8">
+<button id="new-poc-btn" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors text-lg shadow-lg">+ Criar Novo PoC</button>
+</div>
+
+<div id="poc-list-container" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Lista de PoCs salvos -->
+</div>
+</div>
+</div>
+
+<div id="main-view" class="view">
+<div class="container mx-auto p-4 md:p-8">
+<header class="text-center mb-8">
+<h1 id="poc-main-title" class="text-3xl md:text-4xl font-bold text-slate-100"></h1>
+<p id="poc-main-client" class="text-slate-400 mt-2"></p>
+</header>
+
+<nav class="flex flex-wrap justify-center gap-2 md:gap-4 mb-8">
+<button data-tab="technologies" class="nav-btn active font-medium py-2 px-4 rounded-lg bg-slate-700 border border-slate-600 hover:bg-blue-600 hover:text-white">Tecnologias</button>
+<button data-tab="test_plan" class="nav-btn font-medium py-2 px-4 rounded-lg bg-slate-700 border border-slate-600 hover:bg-blue-600 hover:text-white">Plano de Testes</button>
+<button data-tab="results" class="nav-btn font-medium py-2 px-4 rounded-lg bg-slate-700 border border-slate-600 hover:bg-blue-600 hover:text-white">Resultados</button>
+<button data-tab="summary" class="nav-btn font-medium py-2 px-4 rounded-lg bg-slate-700 border border-slate-600 hover:bg-blue-600 hover:text-white">Resumo</button>
+</nav>
+
+<main>
+<!-- Sections: technologies, test_plan, results, summary -->
+<section id="technologies" class="content-section active"></section>
+<section id="test_plan" class="content-section"></section>
+<section id="results" class="content-section"></section>
+<section id="summary" class="content-section"></section>
+</main>
+
+<footer class="text-center mt-8 pt-8 border-t border-slate-700 flex justify-center items-center gap-4">
+<button id="back-to-list-btn" class="bg-slate-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-700 transition-colors">Voltar à Lista de PoCs</button>
+<button id="save-poc-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">Salvar PoC</button>
+</footer>
+</div>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="modal-overlay">
+<div class="modal-content">
+<h3 id="modal-title" class="text-2xl font-bold mb-6 text-slate-100"></h3>
+<form id="modal-form">
+<div id="form-fields" class="space-y-4"></div>
+<div class="flex justify-end gap-4 mt-8">
+<button type="button" id="cancel-btn" class="bg-slate-600 text-slate-100 font-bold py-2 px-4 rounded-lg hover:bg-slate-500">Cancelar</button>
+<button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">Salvar</button>
+</div>
+</form>
+</div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const { jsPDF } = window.jspdf;
+    
+    const views = {
+        selection: document.getElementById('poc-selection-view'),
+        main: document.getElementById('main-view')
+    };
+    
+    const mainTabs = document.querySelectorAll('.nav-btn');
+    const contentSections = document.querySelectorAll('.content-section');
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalForm = document.getElementById('modal-form');
+    const formFields = document.getElementById('form-fields');
+    const cancelBtn = document.getElementById('cancel-btn');
+    
+    let chartInstance = null;
+    let currentEditing = { type: null, id: null };
+    let appData = { activePocId: null, pocs: [] };
+
+    function loadData() {
+        const data = localStorage.getItem('allPocData');
+        if (data) {
+            appData = JSON.parse(data);
+        } else {
+            const examplePoc = {
+                id: `poc_${Date.now()}`,
+                pocTitle: "PoC de Rede para Matriz (Exemplo)",
+                clientName: "Empresa Exemplo SA",
+                createdAt: new Date().toLocaleDateString(),
+                technologies: [
+                    { id: 1, name: 'SD-WAN', scope: 'Failover, QoS, Gerenciamento', criteria: 'Failover < 5s, MOS > 4.0' },
+                    { id: 2, name: 'Firewall', scope: 'Throughput, Filtro Web, VPN', criteria: 'Throughput > 70%, Bloqueio 100%' }
+                ],
+                testCases: [
+                    { id: 1, tech: 'SD-WAN', name: 'Failover por Desconexão', target: 5, result: 3, unit: 's', status: 'Aprovado' },
+                    { id: 2, tech: 'Firewall', name: 'Throughput com IPS', target: 70, result: 65, unit: '%', status: 'Reprovado' }
+                ],
+                summary: "A PoC inicial demonstrou forte capacidade de failover do SD-WAN, mas a performance do Firewall precisa de otimização."
+            };
+            appData.pocs.push(examplePoc);
+            saveData();
+        }
+    }
+
+    function saveData() {
+        localStorage.setItem('allPocData', JSON.stringify(appData));
+        const saveBtn = document.getElementById('save-poc-btn');
+        if(saveBtn) {
+            saveBtn.textContent = 'Salvo!';
+            setTimeout(() => { saveBtn.textContent = 'Salvar PoC'; }, 2000);
+        }
+    }
+
+    function getActivePoc() {
+        return appData.pocs.find(p => p.id === appData.activePocId);
+    }
+
+    function switchView(viewName) {
+        Object.values(views).forEach(v => v.classList.remove('active'));
+        views[viewName].classList.add('active');
+    }
+
+    function loadPoc(pocId) {
+        appData.activePocId = pocId;
+        const poc = getActivePoc();
+        if (!poc) return;
+        
+        document.getElementById('poc-main-title').textContent = poc.pocTitle;
+        document.getElementById('poc-main-client').textContent = `Cliente: ${poc.clientName}`;
+        
+        fullRender();
+        switchView('main');
+        document.querySelector('.nav-btn[data-tab="technologies"]').click();
+    }
+
+    function renderPocList() {
+        const container = document.getElementById('poc-list-container');
+        container.innerHTML = '';
+        
+        if (appData.pocs.length === 0) {
+            container.innerHTML = `<p class="text-center text-slate-500 col-span-full">Nenhuma Prova de Conceito encontrada. Crie uma nova para começar.</p>`;
+            return;
+        }
+        
+        appData.pocs.forEach(poc => {
+            const card = document.createElement('div');
+            card.className = 'bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700 hover:shadow-blue-500/20 hover:border-blue-500 transition-all cursor-pointer';
+            card.innerHTML = `
+                <h3 class="font-bold text-xl text-blue-400">${poc.pocTitle}</h3>
+                <p class="text-slate-400 mt-1">${poc.clientName}</p>
+                <p class="text-xs text-slate-500 mt-4">Criado em: ${poc.createdAt}</p>
+            `;
+            card.addEventListener('click', () => loadPoc(poc.id));
+            container.appendChild(card);
+        });
+    }
+
+    function renderTechnologies() {
+        const poc = getActivePoc();
+        const container = document.getElementById('technologies');
+        
+        container.innerHTML = `
+            <div class="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-slate-100">Tecnologias em Análise</h2>
+                    <button id="add-tech-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Adicionar Tecnologia</button>
+                </div>
+                <div id="tech-cards-container" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            </div>
+        `;
+        
+        const cardsContainer = container.querySelector('#tech-cards-container');
+        poc.technologies.forEach(tech => {
+            const card = document.createElement('div');
+            card.className = 'bg-slate-900 p-4 rounded-lg border border-slate-700';
+            card.innerHTML = `
+                <h4 class="font-bold text-lg text-blue-400">${tech.name}</h4>
+                <p class="text-sm text-slate-400 mt-2"><strong class="text-slate-200">Escopo:</strong> ${tech.scope}</p>
+                <p class="text-sm text-slate-400 mt-1"><strong class="text-slate-200">Critérios:</strong> ${tech.criteria}</p>
+                <div class="flex justify-end gap-2 mt-4">
+                    <button class="edit-tech-btn text-xs font-semibold text-blue-400 hover:underline" data-id="${tech.id}">Editar</button>
+                    <button class="delete-tech-btn text-xs font-semibold text-red-400 hover:underline" data-id="${tech.id}">Excluir</button>
+                </div>
+            `;
+            cardsContainer.appendChild(card);
+        });
+        
+        document.getElementById('add-tech-btn').addEventListener('click', () => openModal('tech'));
+    }
+
+    function renderTestCases() {
+        const poc = getActivePoc();
+        const container = document.getElementById('test_plan');
+        
+        container.innerHTML = `
+            <div class="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-slate-100">Plano de Testes Detalhado</h2>
+                    <button id="add-test-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Adicionar Caso de Teste</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-900 text-slate-400 uppercase">
+                            <tr>
+                                <th class="p-3">ID</th>
+                                <th class="p-3">Tecnologia</th>
+                                <th class="p-3">Caso de Teste</th>
+                                <th class="p-3">Meta</th>
+                                <th class="p-3">Resultado</th>
+                                <th class="p-3">Status</th>
+                                <th class="p-3 text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="test-cases-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        
+        const tbody = container.querySelector('#test-cases-tbody');
+        poc.testCases.forEach(test => {
+            const statusColors = { 
+                'Pendente': 'bg-slate-600 text-slate-200', 
+                'Aprovado': 'bg-green-800 text-green-200', 
+                'Reprovado': 'bg-red-800 text-red-200' 
+            };
+            
+            const row = document.createElement('tr');
+            row.className = 'border-b border-slate-700';
+            row.innerHTML = `
+                <td class="p-3 font-medium text-slate-200">${test.id}</td>
+                <td class="p-3 text-slate-300">${test.tech}</td>
+                <td class="p-3 font-semibold text-slate-200">${test.name}</td>
+                <td class="p-3 text-slate-400">${test.target} ${test.unit}</td>
+                <td class="p-3 text-slate-400">${test.result !== null ? `${test.result} ${test.unit}` : 'N/A'}</td>
+                <td class="p-3"><span class="px-2 py-1 text-xs font-semibold rounded-full ${statusColors[test.status]}">${test.status}</span></td>
+                <td class="p-3 text-right">
+                    <button class="edit-test-btn text-xs font-semibold text-blue-400 hover:underline" data-id="${test.id}">Editar</button>
+                    <button class="delete-test-btn text-xs font-semibold text-red-400 hover:underline ml-2" data-id="${test.id}">Excluir</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        document.getElementById('add-test-btn').addEventListener('click', () => openModal('test'));
+    }
+
+    function renderResults() {
+        const container = document.getElementById('results');
+        
+        container.innerHTML = `
+            <div class="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
+                <h2 class="text-2xl font-bold text-slate-100 mb-2">Análise de Resultados</h2>
+                <p class="mb-6 text-slate-400">O gráfico compara as metas com os resultados obtidos. Ele é atualizado automaticamente.</p>
+                <div class="chart-container">
+                    <canvas id="resultsChart"></canvas>
+                </div>
+            </div>
+        `;
+        
+        const poc = getActivePoc();
+        const chartData = {
+            labels: poc.testCases.map(t => t.name),
+            targets: poc.testCases.map(t => t.target),
+            results: poc.testCases.map(t => t.result)
+        };
+        
+        const ctx = document.getElementById('resultsChart').getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+        
+        chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: chartData.labels,
+                datasets: [
+                    { 
+                        label: 'Meta', 
+                        data: chartData.targets, 
+                        backgroundColor: 'rgba(96, 165, 250, 0.5)', 
+                        borderColor: 'rgba(96, 165, 250, 1)', 
+                        borderWidth: 1, 
+                        borderRadius: 4 
+                    },
+                    { 
+                        label: 'Resultado Obtido', 
+                        data: chartData.results, 
+                        backgroundColor: 'rgba(74, 222, 128, 0.6)', 
+                        borderColor: 'rgba(74, 222, 128, 1)', 
+                        borderWidth: 1, 
+                        borderRadius: 4 
+                    }
+                ]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { 
+                    y: { 
+                        beginAtZero: true, 
+                        grid: { color: '#334155' }, 
+                        ticks: { color: '#94a3b8' } 
+                    }, 
+                    x: { 
+                        grid: { display: false }, 
+                        ticks: { color: '#94a3b8' } 
+                    } 
+                },
+                plugins: { 
+                    legend: { 
+                        labels: { color: '#cbd5e1' } 
+                    } 
+                }
+            }
+        });
+    }
+
+    function renderSummary() {
+        const poc = getActivePoc();
+        const container = document.getElementById('summary');
+        
+        const totalTests = poc.testCases.length;
+        const approved = poc.testCases.filter(t => t.status === 'Aprovado').length;
+        const failed = poc.testCases.filter(t => t.status === 'Reprovado').length;
+        const pending = poc.testCases.filter(t => t.status === 'Pendente').length;
+        const approvedPercent = totalTests > 0 ? ((approved / totalTests) * 100).toFixed(0) : 0;
+        
+        container.innerHTML = `
+            <div class="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
+                <div id="summary-print-area" class="bg-slate-800 p-4">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-100">Resumo do Relatório da PoC</h2>
+                            <p class="text-slate-400 mt-1">Projeto: ${poc.pocTitle} | Cliente: ${poc.clientName}</p>
+                        </div>
+                        <button id="print-summary-btn" class="bg-slate-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-slate-500 transition-colors">Gerar PDF</button>
+                    </div>
+                    
+                    <div class="grid md:grid-cols-3 gap-6 mt-8 border-t border-b border-slate-700 py-6">
+                        <div>
+                            <h4 class="font-bold text-lg text-slate-200">Resultado Geral</h4>
+                            <p class="${approvedPercent >= 70 ? 'text-green-400' : 'text-red-400'} text-3xl font-bold">${approvedPercent}% Aprovado</p>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-lg text-slate-200">Estatísticas</h4>
+                            <p class="text-slate-400">${approved} Aprovados, ${failed} Reprovados, ${pending} Pendentes de ${totalTests} testes.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <h4 class="font-bold text-lg text-slate-200 mb-2">Conclusão Final</h4>
+                        <textarea id="summary-text" class="w-full h-40 p-2 border rounded-md form-input">${poc.summary || ''}</textarea>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('print-summary-btn').addEventListener('click', generatePdf);
+        document.getElementById('summary-text').addEventListener('blur', (e) => {
+            poc.summary = e.target.value;
+            saveData();
+        });
+    }
+
+    function generatePdf() {
+        const reportElement = document.getElementById('summary-print-area');
+        const printButton = reportElement.querySelector('#print-summary-btn');
+        
+        printButton.style.display = 'none';
+        
+        html2canvas(reportElement, { 
+            scale: 2,
+            backgroundColor: '#1e293b' // Match the card background
+        }).then(canvas => {
+            printButton.style.display = 'block';
+            
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({
+                orientation: 'p',
+                unit: 'mm',
+                format: 'a4'
+            });
+            
+            const imgProps= pdf.getImageProperties(imgData);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save('relatorio-poc.pdf');
+        });
+    }
+
+    function openModal(type, id = null) {
+        currentEditing = { type, id };
+        let item = {};
+        
+        if (type === 'new_poc') {
+            modalTitle.textContent = 'Criar Nova Prova de Conceito';
+            formFields.innerHTML = `
+                <div>
+                    <label class="block text-sm font-medium text-slate-300">Nome do Cliente</label>
+                    <input type="text" name="clientName" class="mt-1 block w-full rounded-md shadow-sm form-input" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300">Título da PoC</label>
+                    <input type="text" name="pocTitle" class="mt-1 block w-full rounded-md shadow-sm form-input" required>
+                </div>
+            `;
+        } else if (type === 'tech') {
+            const poc = getActivePoc();
+            modalTitle.textContent = id ? 'Editar Tecnologia' : 'Adicionar Tecnologia';
+            if (id) item = poc.technologies.find(t => t.id === id);
+            
+            formFields.innerHTML = `
+                <input type="hidden" name="id" value="${item.id || ''}">
+                <div>
+                    <label class="text-sm font-medium text-slate-300">Nome</label>
+                    <input type="text" name="name" value="${item.name || ''}" class="mt-1 block w-full rounded-md form-input" required>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-slate-300">Escopo</label>
+                    <input type="text" name="scope" value="${item.scope || ''}" class="mt-1 block w-full rounded-md form-input" required>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-slate-300">Critérios</label>
+                    <input type="text" name="criteria" value="${item.criteria || ''}" class="mt-1 block w-full rounded-md form-input" required>
+                </div>
+            `;
+        } else if (type === 'test') {
+            const poc = getActivePoc();
+            modalTitle.textContent = id ? 'Editar Caso de Teste' : 'Adicionar Caso de Teste';
+            if (id) item = poc.testCases.find(t => t.id === id);
+            
+            formFields.innerHTML = `
+                <input type="hidden" name="id" value="${item.id || ''}">
+                <div>
+                    <label class="text-sm font-medium text-slate-300">Nome do Teste</label>
+                    <input type="text" name="name" value="${item.name || ''}" class="mt-1 block w-full rounded-md form-input" required>
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-slate-300">Tecnologia</label>
+                    <input type="text" name="tech" value="${item.tech || ''}" class="mt-1 block w-full rounded-md form-input" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-slate-300">Meta</label>
+                        <input type="number" step="any" name="target" value="${item.target || ''}" class="mt-1 block w-full rounded-md form-input" required>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-slate-300">Resultado</label>
+                        <input type="number" step="any" name="result" value="${item.result || ''}" class="mt-1 block w-full rounded-md form-input">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-slate-300">Unidade</label>
+                        <input type="text" name="unit" value="${item.unit || ''}" class="mt-1 block w-full rounded-md form-input" placeholder="ex: s, %, Mbps" required>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-slate-300">Status</label>
+                        <select name="status" class="mt-1 block w-full rounded-md form-input">
+                            <option>Pendente</option>
+                            <option>Aprovado</option>
+                            <option>Reprovado</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            if (item.status) document.querySelector('select[name="status"]').value = item.status;
+        }
+        
+        modal.classList.add('visible');
+    }
+
+    function closeModal() {
+        modal.classList.remove('visible');
+        modalForm.reset();
+        formFields.innerHTML = '';
+    }
+
+    function fullRender() {
+        renderTechnologies();
+        renderTestCases();
+        renderResults();
+        renderSummary();
+    }
+
+    modalForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+        const poc = getActivePoc();
+        
+        if (currentEditing.type === 'new_poc') {
+            const newPoc = {
+                id: `poc_${Date.now()}`,
+                createdAt: new Date().toLocaleDateString(),
+                technologies: [], 
+                testCases: [], 
+                summary: '',
+                ...data
+            };
+            appData.pocs.push(newPoc);
+            saveData();
+            loadPoc(newPoc.id);
+        } else if (currentEditing.type === 'tech') {
+            if (currentEditing.id) {
+                const index = poc.technologies.findIndex(t => t.id === currentEditing.id);
+                poc.technologies[index] = { ...poc.technologies[index], ...data };
+            } else {
+                data.id = Date.now();
+                poc.technologies.push(data);
+            }
+        } else if (currentEditing.type === 'test') {
+            data.target = parseFloat(data.target);
+            data.result = data.result ? parseFloat(data.result) : null;
+            
+            if (currentEditing.id) {
+                const index = poc.testCases.findIndex(t => t.id === currentEditing.id);
+                poc.testCases[index] = { ...poc.testCases[index], ...data };
+            } else {
+                data.id = Date.now();
+                poc.testCases.push(data);
+            }
+        }
+        
+        saveData();
+        fullRender();
+        closeModal();
+    });
+
+    document.getElementById('new-poc-btn').addEventListener('click', () => openModal('new_poc'));
+    
+    document.getElementById('back-to-list-btn').addEventListener('click', () => {
+        appData.activePocId = null;
+        saveData();
+        switchView('selection');
+        renderPocList();
+    });
+    
+    document.getElementById('save-poc-btn').addEventListener('click', saveData);
+    
+    cancelBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    document.body.addEventListener('click', (e) => {
+        const poc = getActivePoc();
+        if (!poc) return;
+        
+        if (e.target.matches('.edit-tech-btn')) openModal('tech', parseInt(e.target.dataset.id));
+        if (e.target.matches('.edit-test-btn')) openModal('test', parseInt(e.target.dataset.id));
+        
+        if (e.target.matches('.delete-tech-btn')) {
+            if (confirm('Tem certeza?')) {
+                const id = parseInt(e.target.dataset.id);
+                poc.technologies = poc.technologies.filter(t => t.id !== id);
+                saveData();
+                fullRender();
+            }
+        }
+        
+        if (e.target.matches('.delete-test-btn')) {
+            if (confirm('Tem certeza?')) {
+                const id = parseInt(e.target.dataset.id);
+                poc.testCases = poc.testCases.filter(t => t.id !== id);
+                saveData();
+                fullRender();
+            }
+        }
+    });
+
+    mainTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabId = tab.dataset.tab;
+            mainTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+            contentSections.forEach(s => s.classList.toggle('active', s.id === tabId));
+        });
+    });
+
+    // Initial Load
+    loadData();
+    renderPocList();
+});
+</script>
+</body>
+</html>

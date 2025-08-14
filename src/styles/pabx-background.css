@@ -1,0 +1,26 @@
+/* Pano de fundo para calculadora PABX/SIP igual ao da VM */
+.pabx-calculator-background {
+    min-height: 100vh;
+    position: relative;
+    background-image: url('https://img.freepik.com/premium-photo/corridor-data-center-server-room-server-room-internet-communication-networks-ai-generativex9_28914-4589.jpg?w=1380');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+}
+
+.pabx-calculator-overlay {
+    position: absolute;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
+.pabx-calculator-content {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
