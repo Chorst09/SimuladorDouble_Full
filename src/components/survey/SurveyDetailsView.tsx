@@ -16,15 +16,21 @@ interface SiteSurvey {
 interface SurveyDetailsViewProps {
   survey: SiteSurvey;
   onBack: () => void;
+  onGenerateTopology: (survey: SiteSurvey) => void;
 }
 
-export function SurveyDetailsView({ survey, onBack }: SurveyDetailsViewProps) {
+export function SurveyDetailsView({ survey, onBack, onGenerateTopology }: SurveyDetailsViewProps) {
   return (
     <div className="container mx-auto py-8">
-      <Button variant="ghost" onClick={onBack} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Voltar para a Lista
-      </Button>
+      <div className="flex justify-between items-center mb-6">
+        <Button variant="ghost" onClick={onBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar para a Lista
+        </Button>
+        <Button onClick={() => onGenerateTopology(survey)}>
+          Gerar Topologia
+        </Button>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl">Detalhes do Site Survey</CardTitle>

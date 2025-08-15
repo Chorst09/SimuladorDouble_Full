@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { CustomerInfoForm } from '@/components/survey/CustomerInfoForm';
 import { DetailedSiteSurveyForm } from '@/components/survey/DetailedSiteSurveyForm';
+// import { TopologyViewer } from '@/components/topology/TopologyViewer';
+// import { TopologyConfig } from '@/components/topology/types/topology';
 import { SurveyDetailsView } from '@/components/survey/SurveyDetailsView';
 import { Plus, ArrowLeft, Trash2, Eye } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
@@ -27,6 +29,7 @@ interface CustomerData {
   surveyType: string;
 }
 
+
 interface SiteSurvey extends CustomerData {
   id: string;
   details: Record<string, string>;
@@ -34,13 +37,14 @@ interface SiteSurvey extends CustomerData {
 }
 
 export default function SiteSurveyPage() {
-  const [viewMode, setViewMode] = useState('list'); // 'list', 'customer', or 'survey'
+  const [viewMode, setViewMode] = useState('list'); // 'list', 'customer', 'survey', 'details', 'topology'
   const [surveys, setSurveys] = useState<SiteSurvey[]>([]);
   const [currentCustomerData, setCurrentCustomerData] = useState<CustomerData | null>(null);
     const { toast } = useToast();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [surveyToDelete, setSurveyToDelete] = useState<string | null>(null);
     const [selectedSurvey, setSelectedSurvey] = useState<SiteSurvey | null>(null);
+  const [topologyConfig, setTopologyConfig] = useState<TopologyConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
@@ -84,7 +88,15 @@ export default function SiteSurveyPage() {
       createdAt: new Date().toISOString(),
     };
 
-        if (!db) return;
+        if (!db) {
+      toast({ 
+        title: "Erro de Conexão", 
+        description: "Não foi possível conectar ao banco de dados. Verifique sua conexão.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     try {
             const docRef = await addDoc(collection(db, 'site_surveys'), newSurvey as Omit<SiteSurvey, 'id'>);
             setSurveys(prev => [{ ...newSurvey, id: docRef.id } as SiteSurvey, ...prev]);
@@ -93,13 +105,25 @@ export default function SiteSurveyPage() {
       title: "Site Survey Salvo!",
               description: `O survey para o cliente ${newSurvey.customerName} foi criado com sucesso.`,
       });
-    } catch (error) {
+      
+      setViewMode('list');
+      setCurrentCustomerData(null);
+    } catch (error: any) {
       console.error("Error adding document: ", error);
-      toast({ title: "Erro ao Salvar", description: "Não foi possível salvar o survey.", variant: "destructive" });
+      
+      let errorMessage = "Não foi possível salvar o survey.";
+      if (error?.code === 'permission-denied') {
+        errorMessage = "Erro de permissão. Verifique as regras do Firestore no console do Firebase.";
+      } else if (error?.code === 'unavailable') {
+        errorMessage = "Serviço temporariamente indisponível. Tente novamente.";
+      }
+      
+      toast({ 
+        title: "Erro ao Salvar", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
     }
-
-    setViewMode('list');
-        setCurrentCustomerData(null);
   };
 
     const handleDelete = async (surveyId: string) => {
@@ -126,6 +150,29 @@ export default function SiteSurveyPage() {
     setIsDeleteDialogOpen(true);
   };
 
+  const handleGenerateTopology = (survey: SiteSurvey) => {
+    const deviceQuantities = {
+      towers: parseInt(survey.details['q-equip-towers'] || '0', 10),
+      antennas: parseInt(survey.details['q-equip-antennas'] || '0', 10),
+      routers: parseInt(survey.details['q-equip-routers'] || '0', 10),
+      switches: parseInt(survey.details['q-equip-switches'] || '0', 10),
+      aps: parseInt(survey.details['q-equip-aps'] || '0', 10),
+      controllers: parseInt(survey.details['q-equip-controllers'] || '0', 10),
+    };
+
+    const config: TopologyConfig = {
+      type: survey.surveyType.toLowerCase() as any,
+      customerName: survey.customerName,
+      address: survey.address,
+      customizations: { 
+        ...survey.details,
+        ...deviceQuantities
+      }
+    };
+    setTopologyConfig(config);
+    setViewMode('topology');
+  };
+
   const handleViewDetails = (survey: SiteSurvey) => {
     setSelectedSurvey(survey);
     setViewMode('details');
@@ -139,6 +186,8 @@ export default function SiteSurveyPage() {
     } else if (viewMode === 'details') {
       setSelectedSurvey(null);
       setViewMode('list');
+    } else if (viewMode === 'topology') {
+      setViewMode('details');
     }
   };
 
@@ -154,8 +203,23 @@ export default function SiteSurveyPage() {
     );
   }
 
-    if (viewMode === 'details' && selectedSurvey) {
-    return <SurveyDetailsView survey={selectedSurvey} onBack={handleBack} />;
+    if (viewMode === 'topology' && selectedSurvey && topologyConfig) {
+    return (
+      <div className="container mx-auto py-8">
+        <Button variant="ghost" onClick={handleBack} className="mb-4">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar para Detalhes
+        </Button>
+        <h2 className="text-2xl font-bold mb-4">Topologia de Rede para {selectedSurvey.customerName}</h2>
+        <div style={{ height: '70vh', border: '1px solid #ccc', borderRadius: '8px' }}>
+          <TopologyViewer config={topologyConfig} />
+        </div>
+      </div>
+    );
+  }
+
+  if (viewMode === 'details' && selectedSurvey) {
+    return <SurveyDetailsView survey={selectedSurvey} onBack={handleBack} onGenerateTopology={handleGenerateTopology} />;
   }
 
   if (viewMode === 'survey' && currentCustomerData) {
@@ -167,6 +231,8 @@ export default function SiteSurveyPage() {
         </Button>
         <DetailedSiteSurveyForm
           surveyType={currentCustomerData.surveyType}
+          customerName={currentCustomerData.customerName}
+          address={currentCustomerData.address}
           onSubmit={handleSurveySubmit}
           onBack={handleBack}
         />

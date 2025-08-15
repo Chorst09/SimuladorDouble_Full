@@ -1,51 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import '@/styles/print.css';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from '@/components/ui/checkbox';
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-    Calculator,
-    Phone,
-    PhoneForwarded,
-    Settings,
-    FileText,
-    Download,
-    Save,
-    Search,
-    Edit,
-    Plus,
-    User,
-    Briefcase,
-    Trash2
-} from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Phone, PhoneForwarded } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 // Interfaces
-interface PABXTier {
-    min: number;
-    max: number;
-    setup: number;
-    monthly: number;
-}
-
-interface SIPPlan {
-    name: string;
-    type: 'PLANO' | 'TARIFADO';
-    setup: number;
-    monthly: number;
-    monthlyWithEquipment?: number; // Opcional para planos que não têm essa opção
-    channels: number;
-}
-
 interface PABXResult {
     setup: number;
     baseMonthly: number;
@@ -57,1023 +25,1116 @@ interface PABXResult {
 interface SIPResult {
     setup: number;
     monthly: number;
-    additionalChannelsCost: number;
 }
 
-// Interface para um produto adicionado à proposta
-type ProductType = 'PABX' | 'SIP';
-
-interface Product {
-    id: string;
-    type: ProductType;
+interface ProposalItem {
     description: string;
     setup: number;
     monthly: number;
-    details: any;
+}
+
+interface ClientData {
+    name: string;
+    email: string;
+    phone: string;
+}
+
+interface AccountManagerData {
+    name: string;
+    email: string;
+    phone: string;
 }
 
 interface Proposal {
     id: string;
-    clientName: string;
-    accountManager: string;
-    products: Product[];
+    client: ClientData;
+    accountManager: AccountManagerData;
+    items: ProposalItem[];
     totalSetup: number;
     totalMonthly: number;
-    date: string;
+    createdAt: string;
 }
 
 const PABXSIPCalculator: React.FC = () => {
-    // Estados de gerenciamento de propostas
-    const [currentProposal, setCurrentProposal] = useState<Proposal | null>(null);
-    const [viewMode, setViewMode] = useState<'search' | 'create' | 'edit'>('search');
-    const [proposals, setProposals] = useState<Proposal[]>([]);
+    // Estado para controlar a tela atual
+    const [currentView, setCurrentView] = useState<'search' | 'client-form' | 'calculator'>('search');
     const [searchTerm, setSearchTerm] = useState<string>('');
+    const [savedProposals, setSavedProposals] = useState<Proposal[]>([]);
 
-    // Estados dos formulários
-    const [clientName, setClientName] = useState('');
-    const [accountManager, setAccountManager] = useState('');
-    const [addedProducts, setAddedProducts] = useState<Product[]>([]);
+    // Estados dos dados do cliente e gerente
+    const [clientData, setClientData] = useState<ClientData>({
+        name: '',
+        email: '',
+        phone: ''
+    });
+    const [accountManagerData, setAccountManagerData] = useState<AccountManagerData>({
+        name: '',
+        email: '',
+        phone: ''
+    });
 
     // Estados PABX
-    const [pabxExtensions, setPabxExtensions] = useState<number>(0);
-    const [pabxIncludeDevices, setPabxIncludeDevices] = useState<boolean>(false);
-    const [pabxDeviceQuantity, setPabxDeviceQuantity] = useState<number>(0);
+    const [pabxExtensions, setPabxExtensions] = useState<number>(32);
     const [pabxIncludeSetup, setPabxIncludeSetup] = useState<boolean>(true);
+    const [pabxIncludeDevices, setPabxIncludeDevices] = useState<boolean>(true);
+    const [pabxDeviceQuantity, setPabxDeviceQuantity] = useState<number>(5);
+    const [pabxIncludeAI, setPabxIncludeAI] = useState<boolean>(true);
+    const [pabxAIPlan, setPabxAIPlan] = useState<string>('100K');
     const [pabxResult, setPabxResult] = useState<PABXResult | null>(null);
 
-    // Estados Agente IA
-    const [includeAIAgent, setIncludeAIAgent] = useState(false);
-    const [selectedAIAgentPlan, setSelectedAIAgentPlan] = useState('');
-
     // Estados SIP
-    const [selectedSipPlan, setSelectedSipPlan] = useState<string>('');
+    const [sipPlan, setSipPlan] = useState<string>('SIP ILIMITADO 10 Canais');
+    const [sipIncludeSetup, setSipIncludeSetup] = useState<boolean>(false);
     const [sipAdditionalChannels, setSipAdditionalChannels] = useState<number>(0);
-    const [sipWithEquipment, setSipWithEquipment] = useState<boolean>(false);
-    const [sipIncludeSetup, setSipIncludeSetup] = useState<boolean>(true);
+    const [sipWithEquipment, setSipWithEquipment] = useState<boolean>(true);
     const [sipResult, setSipResult] = useState<SIPResult | null>(null);
 
-    // Dados para as tabelas de List Price
-    const pabxListPriceData = {
-        headers: ['Serviço', 'Até 10 ramais', 'De 11 a 20 ramais', 'De 21 a 30 ramais', 'De 31 a 50 ramais', 'De 51 a 100 ramais', 'De 101 a 500 ramais', 'De 501 a 1.000 ramais'],
-        rows: [
-            { service: 'Setup (cobrança única)', values: ['1.250,00', '2.000,00', '2.500,00', '3.000,00', '3.500,00', 'Valor a combinar', 'Valor a combinar'] },
-            { service: 'Valor por ramal (mensal unitário)', values: ['30,00', '29,00', '28,00', '27,00', '26,00', '25,00', '24,50'] },
-            { service: 'Valor hospedagem (mensal)', values: ['200,00', '220,00', '250,00', '300,00', '400,00', 'Valor a combinar', 'Valor a combinar'] },
-            { service: 'Aluguel Aparelho Grandstream (mensal)', values: ['35,00', '34,00', '33,00', '32,00', '30,00', 'Valor a combinar', 'Valor a combinar'] },
-        ],
-    };
+    // Estados da Proposta
+    const [proposalItems, setProposalItems] = useState<ProposalItem[]>([]);
 
-    const sipListPriceData = {
-        headers: {
-            top: [
-                { title: 'SIP TARIFADO', span: 2 },
-                { title: 'SIP TARIFADO', span: 1 },
-                { title: 'SIP TARIFADO', span: 1 },
-                { title: 'SIP TARIFADO', span: 1 },
-                { title: 'SIP TARIFADO', span: 1 },
-                { title: 'SIP ILIMITADO', span: 1 },
-                { title: 'SIP ILIMITADO', span: 1 },
-                { title: 'SIP ILIMITADO', span: 1 },
-                { title: 'SIP ILIMITADO', span: 1 },
-                { title: 'SIP ILIMITADO', span: 1 }
-            ],
-            bottom: [
-                'Call Center',
-                '2 canais',
-                '4 Canais',
-                '10 Canais',
-                '30 Canais',
-                '60 Canais',
-                '5 Canais',
-                '10 Canais',
-                '20 Canais',
-                '30 Canais',
-                '60 Canais'
-            ]
+    // Estados para edição das tabelas
+    const [isEditingPABX, setIsEditingPABX] = useState(false);
+    const [isEditingSIP, setIsEditingSIP] = useState(false);
+    const [isEditingAI, setIsEditingAI] = useState(false);
+
+    // Dados de preços do List Price - PABX (editáveis)
+    const [pabxPrices, setPabxPrices] = useState({
+        setup: {
+            '10': 1250,
+            '20': 2000,
+            '30': 2500,
+            '50': 3000,
+            '100': 3500,
+            '500': 0, // Valor a combinar
+            '1000': 0 // Valor a combinar
         },
-        rows: [
-            {
-                service: 'Canais Adicionais (Assinatura Mensal)',
-                values: [
-                    'Não Aplicável',
-                    'Sem possibilidade',
-                    'Sem possibilidade',
-                    'Sem possibilidade',
-                    'Sem possibilidade',
-                    'Sem possibilidade',
-                    'Até 5 canais R$ 30 por canal adicional',
-                    'Até 5 canais R$ 30 por canal adicional',
-                    'Até 5 canais R$ 30 por canal adicional',
-                    'Até 5 canais R$ 30 por canal adicional',
-                    ''
-                ]
-            },
-            {
-                service: 'Canais Adicionais (Franquia Mensal)',
-                values: [
-                    'Não Aplicável',
-                    'Sem possibilidade',
-                    '',
-                    'Até 10 canais R$25 por canal adicional/mês',
-                    'Até 20 canais R$ 25 por canal adicional/mês',
-                    'Até 30 canais R$ 25 por canal adicional/mês',
-                    '',
-                    '',
-                    '',
-                    '',
-                    'Sem possibilidade'
-                ]
-            },
-            {
-                service: 'Franquia/Assinatura Mensal (Sem Equipamentos)',
-                values: [
-                    'R$ 200 (Franquia)',
-                    'R$ 150 (Franquia)',
-                    'R$ 250 (Franquia)',
-                    'R$ 350 (Franquia)',
-                    'R$ 550 (Franquia)',
-                    'R$ 1.000 (Franquia)',
-                    'R$ 350 (Assinatura)',
-                    'R$ 450 (Assinatura)',
-                    'R$ 650 (Assinatura)',
-                    'R$ 850 (Assinatura)',
-                    'R$ 1.600 (Assinatura)'
-                ]
-            },
-            {
-                service: 'Franquia/Assinatura Mensal (Com Equipamentos)',
-                values: [
-                    'Não Aplicável',
-                    'Sem possibilidade',
-                    'R$ 500 (Franquia)',
-                    'R$ 650 (Franquia)',
-                    'R$ 1.200 (Franquia)',
-                    '',
-                    'R$ 500 (Assinatura)',
-                    'R$ 600 (Assinatura)',
-                    'R$ 800 (Assinatura)',
-                    'R$ 950 (Assinatura)',
-                    'R$ 1.700 (Assinatura)'
-                ]
-            },
-            {
-                service: 'Minutos Mensais Inclusos para Brasil Móvel',
-                values: [
-                    'Não Aplicável',
-                    '',
-                    'Não aplicável',
-                    '',
-                    '',
-                    '',
-                    '15.000 Minutos',
-                    '20.000 Minutos',
-                    '25.000 Minutos',
-                    '30.000 Minutos',
-                    '60.000 Minutos'
-                ]
-            },
-            {
-                service: 'Números Incluídos (Novos ou Portados)',
-                values: [
-                    'Consultar',
-                    '',
-                    'Máximo 3 Números',
-                    '',
-                    'Máximo 4 Números',
-                    '',
-                    'Máximo 5 Números',
-                    'Máximo 10 Números',
-                    'Máximo 15 Números',
-                    'Máximo 20 Números',
-                    'Máximo 30 Números'
-                ]
-            },
-            {
-                service: 'Numeração Adicional (Mensalidade)',
-                values: [
-                    'Consultar',
-                    '',
-                    'R$ 10 por Número',
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                    'R$ 10 por Número',
-                    '',
-                    ''
-                ]
-            },
-            {
-                service: 'Tarifa Local Fixo (por minuto)',
-                values: [
-                    'R$ 0,015 por minuto',
-                    '',
-                    'R$ 0,02 por minuto',
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                    'Ilimitado',
-                    '',
-                    ''
-                ]
-            },
-            {
-                service: 'Tarifa DDD Fixo (por minuto)',
-                values: [
-                    'R$ 0,05 por minuto',
-                    '',
-                    'R$ 0,06 por minuto',
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                    'Ilimitado',
-                    '',
-                    ''
-                ]
-            },
-            {
-                service: 'Tarifa Brasil Móvel (por minuto)',
-                values: [
-                    'R$ 0,09 por minuto',
-                    '',
-                    'R$ 0,10 por minuto',
-                    '',
-                    '',
-                    '',
-                    '',
-                    '',
-                    'R$ 10 por minuto',
-                    '',
-                    ''
-                ]
-            }
-        ],
-    };
-
-    const aiAgentPlans: { [key: string]: { name: string; monthlyCost: number; messages: string; minutes: string; premiumVoice: string; credits: string; color: string } } = {
-        plan20k: {
-            name: '20K',
-            monthlyCost: 720.00,
-            credits: '20.000 Créditos de Interação',
-            messages: '10.000 mensagens* ou',
-            minutes: '2.000 minutos** ou',
-            premiumVoice: '1.000 voz premium*** ou',
-            color: 'bg-blue-900'
+        monthly: {
+            '10': 30,
+            '20': 29,
+            '30': 28,
+            '50': 27,
+            '100': 26,
+            '500': 25,
+            '1000': 24.5
         },
-        plan40k: {
-            name: '40K',
-            monthlyCost: 1370.00,
-            credits: '40.000 Créditos de Interação',
-            messages: '20.000 mensagens* ou',
-            minutes: '4.000 minutos** ou',
-            premiumVoice: '2.000 voz premium*** ou',
-            color: 'bg-blue-800'
+        hosting: {
+            '10': 200,
+            '20': 220,
+            '30': 250,
+            '50': 300,
+            '100': 400,
+            '500': 0, // Valor a combinar
+            '1000': 0 // Valor a combinar
         },
-        plan60k: {
-            name: '60K',
-            monthlyCost: 1940.00,
-            credits: '60.000 Créditos de Interação',
-            messages: '30.000 mensagens* ou',
-            minutes: '6.000 minutos** ou',
-            premiumVoice: '3.000 voz premium*** ou',
-            color: 'bg-blue-600'
-        },
-        plan100k: {
-            name: '100K',
-            monthlyCost: 3060.00,
-            credits: '100.000 Créditos de Interação',
-            messages: '50.000 mensagens* ou',
-            minutes: '10.000 minutos** ou',
-            premiumVoice: '5.000 voz premium*** ou',
-            color: 'bg-cyan-500'
-        },
-        plan150k: {
-            name: '150K',
-            monthlyCost: 4320.00,
-            credits: '150.000 Créditos de Interação',
-            messages: '75.000 mensagens* ou',
-            minutes: '15.000 minutos** ou',
-            premiumVoice: '7.500 voz premium*** ou',
-            color: 'bg-teal-400'
-        },
-        plan200k: {
-            name: '200K',
-            monthlyCost: 5400.00,
-            credits: '200.000 Créditos de Interação',
-            messages: '100.000 mensagens* ou',
-            minutes: '20.000 minutos** ou',
-            premiumVoice: '10.000 voz premium*** ou',
-            color: 'bg-teal-400'
-        },
+        device: {
+            '10': 35,
+            '20': 34,
+            '30': 33,
+            '50': 32,
+            '100': 30,
+            '500': 0, // Valor a combinar
+            '1000': 0 // Valor a combinar
+        }
+    });
+
+    // Dados de preços do List Price - SIP (editáveis)
+    const [sipPrices, setSipPrices] = useState({
+        'SIP TARIFADO Call Center': { setup: 0, monthly: 200, channels: 2 },
+        'SIP TARIFADO 4 Canais': { setup: 0, monthly: 150, channels: 4 },
+        'SIP TARIFADO 10 Canais': { setup: 0, monthly: 250, channels: 10 },
+        'SIP TARIFADO 30 Canais': { setup: 0, monthly: 350, channels: 30 },
+        'SIP TARIFADO 60 Canais': { setup: 0, monthly: 550, channels: 60 },
+        'SIP ILIMITADO 5 Canais': { setup: 0, monthly: 350, channels: 5 },
+        'SIP ILIMITADO 10 Canais': { setup: 0, monthly: 450, channels: 10 },
+        'SIP ILIMITADO 20 Canais': { setup: 0, monthly: 650, channels: 20 },
+        'SIP ILIMITADO 30 Canais': { setup: 0, monthly: 850, channels: 30 },
+        'SIP ILIMITADO 60 Canais': { setup: 0, monthly: 1600, channels: 60 }
+    });
+
+    // Dados de preços do List Price - Agente IA (editáveis)
+    const [aiAgentPrices, setAiAgentPrices] = useState({
+        '20K': { price: 720, credits: 20000, messages: 10000, minutes: 2000, premium: 1000 },
+        '40K': { price: 1370, credits: 40000, messages: 20000, minutes: 4000, premium: 2000 },
+        '60K': { price: 1940, credits: 60000, messages: 30000, minutes: 6000, premium: 3000 },
+        '100K': { price: 3060, credits: 100000, messages: 50000, minutes: 10000, premium: 5000 },
+        '150K': { price: 4320, credits: 150000, messages: 75000, minutes: 15000, premium: 7500 },
+        '200K': { price: 5400, credits: 200000, messages: 100000, minutes: 20000, premium: 10000 }
+    });
+
+    // Função para determinar a faixa de preço baseada no número de ramais
+    const getPriceRange = (extensions: number): string => {
+        if (extensions <= 10) return '10';
+        if (extensions <= 20) return '20';
+        if (extensions <= 30) return '30';
+        if (extensions <= 50) return '50';
+        if (extensions <= 100) return '100';
+        return '100'; // Para valores acima de 100, usar a última faixa
     };
 
-    const pabxTiers: PABXTier[] = [
-        { min: 1, max: 10, setup: 1250, monthly: 35 },
-        { min: 11, max: 20, setup: 2000, monthly: 33 },
-        { min: 21, max: 30, setup: 2500, monthly: 31 },
-        { min: 31, max: 50, setup: 3000, monthly: 29 },
-        { min: 51, max: 100, setup: 3500, monthly: 27 },
-        { min: 101, max: 500, setup: 0, monthly: 25 }, // Valor a combinar
-        { min: 501, max: 1000, setup: 0, monthly: 23 } // Valor a combinar
-    ];
+    // Calcular PABX
+    const calculatePABX = () => {
+        const range = getPriceRange(pabxExtensions);
 
-    const sipPlans: SIPPlan[] = [
-        // Planos TARIFADO
-        { name: 'SIP TARIFADO Call Center', type: 'TARIFADO', setup: 500, monthly: 200, channels: 0 },
-        { name: 'SIP TARIFADO 2 Canais', type: 'TARIFADO', setup: 500, monthly: 150, channels: 2 },
-        { name: 'SIP TARIFADO 4 Canais', type: 'TARIFADO', setup: 500, monthly: 250, monthlyWithEquipment: 500, channels: 4 },
-        { name: 'SIP TARIFADO 10 Canais', type: 'TARIFADO', setup: 500, monthly: 350, monthlyWithEquipment: 500, channels: 10 },
-        { name: 'SIP TARIFADO 30 Canais', type: 'TARIFADO', setup: 500, monthly: 550, monthlyWithEquipment: 650, channels: 30 },
-        { name: 'SIP TARIFADO 60 Canais', type: 'TARIFADO', setup: 500, monthly: 1000, monthlyWithEquipment: 1200, channels: 60 },
-        // Planos ILIMITADO
-        { name: 'SIP ILIMITADO 5 Canais', type: 'PLANO', setup: 500, monthly: 350, monthlyWithEquipment: 500, channels: 5 },
-        { name: 'SIP ILIMITADO 10 Canais', type: 'PLANO', setup: 500, monthly: 450, monthlyWithEquipment: 600, channels: 10 },
-        { name: 'SIP ILIMITADO 20 Canais', type: 'PLANO', setup: 500, monthly: 650, monthlyWithEquipment: 800, channels: 20 },
-        { name: 'SIP ILIMITADO 30 Canais', type: 'PLANO', setup: 500, monthly: 850, monthlyWithEquipment: 950, channels: 30 },
-        { name: 'SIP ILIMITADO 60 Canais', type: 'PLANO', setup: 500, monthly: 1600, monthlyWithEquipment: 1700, channels: 60 },
-    ];
+        const setup = pabxIncludeSetup ? pabxPrices.setup[range as keyof typeof pabxPrices.setup] : 0;
+        const baseMonthly = (pabxPrices.monthly[range as keyof typeof pabxPrices.monthly] * pabxExtensions) +
+            pabxPrices.hosting[range as keyof typeof pabxPrices.hosting];
+        const deviceRentalCost = pabxIncludeDevices ?
+            (pabxPrices.device[range as keyof typeof pabxPrices.device] * pabxDeviceQuantity) : 0;
+        const aiAgentCost = pabxIncludeAI ? aiAgentPrices[pabxAIPlan as keyof typeof aiAgentPrices]?.price || 0 : 0;
 
-    const costPerAdditionalChannel = 50;
-    const equipmentRentalCost = 35;
-
-    // Lógica de Cálculo
-    const calculatePabxPrice = () => {
-        if (pabxExtensions <= 0) {
-            setPabxResult(null);
-            return;
-        }
-
-        const tier = pabxTiers.find(t => pabxExtensions >= t.min && pabxExtensions <= t.max);
-        if (!tier) {
-            setPabxResult(null);
-            return;
-        }
-
-        let setup = pabxIncludeSetup ? tier.setup : 0;
-        let baseMonthly = tier.monthly * pabxExtensions;
-        let deviceRentalCost = 0;
-        let aiAgentCost = 0;
-
-        if (pabxIncludeDevices) {
-            deviceRentalCost = pabxDeviceQuantity * 35; // R$ 35 por dispositivo
-        }
-
-        if (includeAIAgent) {
-            const plan = Object.values(aiAgentPlans).find(p => p.name === selectedAIAgentPlan);
-            if (plan) {
-                aiAgentCost = plan.monthlyCost;
-            }
-        }
-
-        const totalMonthly = baseMonthly + deviceRentalCost + aiAgentCost;
-        setPabxResult({ setup, baseMonthly, deviceRentalCost, aiAgentCost, totalMonthly });
-    };
-
-    const calculateSipPrice = () => {
-        if (!selectedSipPlan) {
-            setSipResult(null);
-            return;
-        }
-
-        const plan = sipPlans.find(p => p.name === selectedSipPlan);
-        if (plan) {
-            let monthly = (sipWithEquipment && plan.monthlyWithEquipment) ? plan.monthlyWithEquipment : plan.monthly;
-            let additionalChannelsCost = 0;
-
-            if (plan.type === 'TARIFADO' && sipAdditionalChannels > 0) {
-                additionalChannelsCost = sipAdditionalChannels * 20; // R$ 20 por canal adicional
-                monthly += additionalChannelsCost;
-            }
-
-            const setup = sipIncludeSetup ? plan.setup : 0;
-            setSipResult({ setup, monthly, additionalChannelsCost });
-        } else {
-            setSipResult(null);
-        }
-    };
-
-    // Efeitos para cálculos e salvar propostas
-    useEffect(() => {
-        const savedProposals = localStorage.getItem('proposals');
-        if (savedProposals) {
-            setProposals(JSON.parse(savedProposals));
-        }
-    }, []);
-
-    useEffect(() => {
-        calculatePabxPrice();
-    }, [pabxExtensions, pabxIncludeDevices, pabxDeviceQuantity, pabxIncludeSetup, includeAIAgent, selectedAIAgentPlan]);
-
-    useEffect(() => {
-        const plan = sipPlans.find(p => p.name === selectedSipPlan);
-        if (plan && !plan.monthlyWithEquipment && sipWithEquipment) {
-            setSipWithEquipment(false);
-        } else {
-            calculateSipPrice();
-        }
-    }, [selectedSipPlan, sipAdditionalChannels, sipWithEquipment, sipIncludeSetup]);
-
-    // Funções auxiliares
-    const formatCurrency = (value: number) => `R$ ${value.toFixed(2).replace('.', ',')}`;
-    const generateUniqueId = () => `_${Math.random().toString(36).substr(2, 9)}`;
-
-    // Lógica de Produtos
-    const handleAddPabxProduct = () => {
-        if (pabxResult) {
-            let products = [];
-
-            // Produto PABX Principal
-            products.push({
-                id: generateUniqueId(),
-                type: 'PABX',
-                description: `PABX em Nuvem para ${pabxExtensions} ramais`,
-                setup: pabxResult.setup,
-                monthly: pabxResult.baseMonthly,
-                details: { extensions: pabxExtensions }
-            });
-
-            // Produto Aluguel de Aparelhos
-            if (pabxIncludeDevices && pabxDeviceQuantity > 0 && pabxResult.deviceRentalCost > 0) {
-                products.push({
-                    id: generateUniqueId(),
-                    type: 'PABX',
-                    description: `Aluguel de ${pabxDeviceQuantity} aparelho(s) IP`,
-                    setup: 0,
-                    monthly: pabxResult.deviceRentalCost,
-                    details: { quantity: pabxDeviceQuantity }
-                });
-            }
-
-            // Produto Agente IA
-            if (pabxResult && pabxResult.aiAgentCost > 0 && selectedAIAgentPlan) {
-                const plan = aiAgentPlans[selectedAIAgentPlan];
-                const description = `${plan.name} (Até: ${plan.messages.split(' ')[0]} msg, ${plan.minutes.split(' ')[0]} min, ${plan.premiumVoice.split(' ')[0]} voz premium)`;
-                products.push({
-                    id: generateUniqueId(),
-                    type: 'PABX',
-                    description: description,
-                    setup: 0,
-                    monthly: pabxResult.aiAgentCost,
-                    details: { plan: selectedAIAgentPlan }
-                });
-            }
-
-            setAddedProducts(prev => [...prev, ...products]);
-        }
-    };
-
-    const handleAddSipProduct = () => {
-        if (sipResult && selectedSipPlan) {
-            const plan = sipPlans.find(p => p.name === selectedSipPlan);
-            if (plan) {
-                const description = `${plan.name}${sipWithEquipment && plan.channels > 0 ? ' com equipamento' : ''}${sipAdditionalChannels > 0 ? ` + ${sipAdditionalChannels} canais adicionais` : ''}`;
-                setAddedProducts(prev => [...prev, {
-                    id: generateUniqueId(),
-                    type: 'SIP',
-                    description,
-                    setup: sipResult.setup,
-                    monthly: sipResult.monthly,
-                    details: { plan: selectedSipPlan, additionalChannels: sipAdditionalChannels, withEquipment: sipWithEquipment }
-                }]);
-            }
-        }
-    };
-
-    const handleRemoveProduct = (id: string) => {
-        setAddedProducts(prev => prev.filter(p => p.id !== id));
-    };
-
-    // Lógica de Gerenciamento de Propostas
-    useEffect(() => {
-        const savedProposals = localStorage.getItem('proposals');
-        if (savedProposals) {
-            setProposals(JSON.parse(savedProposals));
-        }
-    }, []);
-
-    useEffect(() => {
-        if (proposals.length > 0) {
-            localStorage.setItem('proposals', JSON.stringify(proposals));
-        }
-    }, [proposals]);
-
-    const totalSetup = addedProducts.reduce((sum, p) => sum + p.setup, 0);
-    const totalMonthly = addedProducts.reduce((sum, p) => sum + p.monthly, 0);
-
-    const generateProposalId = (): string => {
-        const now = new Date();
-        const year = now.getFullYear().toString().slice(-2);
-        const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const day = now.getDate().toString().padStart(2, '0');
-        const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-        return `PROP-${year}${month}${day}-${random}`;
-    };
-
-    const clearForm = () => {
-        setClientName('');
-        setAccountManager('');
-        setAddedProducts([]);
-        setPabxExtensions(0);
-        setPabxIncludeDevices(false);
-        setPabxDeviceQuantity(0);
-        setIncludeAIAgent(false);
-        setSelectedAIAgentPlan('');
-        setSelectedSipPlan('');
-        setSipAdditionalChannels(0);
-        setSipWithEquipment(false);
-    };
-
-    const createNewProposal = () => {
-        clearForm();
-        const newProposalId = generateProposalId();
-        const newProposal: Proposal = {
-            id: newProposalId,
-            clientName: '',
-            accountManager: '',
-            products: [],
-            totalSetup: 0,
-            totalMonthly: 0,
-            date: new Date().toLocaleDateString('pt-BR')
+        const result: PABXResult = {
+            setup,
+            baseMonthly,
+            deviceRentalCost,
+            aiAgentCost,
+            totalMonthly: baseMonthly + deviceRentalCost + aiAgentCost
         };
-        setCurrentProposal(newProposal);
-        setViewMode('create');
+
+        setPabxResult(result);
     };
 
-    const editProposal = (proposal: Proposal) => {
-        setCurrentProposal(proposal);
-        setClientName(proposal.clientName);
-        setAccountManager(proposal.accountManager);
-        setAddedProducts(proposal.products);
-        setViewMode('edit');
+    // Calcular SIP
+    const calculateSIP = () => {
+        const planPrice = sipPrices[sipPlan as keyof typeof sipPrices];
+        const setup = sipIncludeSetup ? 50 : 0; // Taxa padrão de setup SIP
+        const monthly = planPrice.monthly;
+
+        const result: SIPResult = {
+            setup,
+            monthly
+        };
+
+        setSipResult(result);
     };
 
+    // Adicionar PABX à proposta
+    const addPABXToProposal = () => {
+        if (!pabxResult) return;
+
+        const newItem: ProposalItem = {
+            description: `PABX ${pabxExtensions} ramais`,
+            setup: pabxResult.setup,
+            monthly: pabxResult.totalMonthly
+        };
+
+        setProposalItems(prev => [...prev, newItem]);
+    };
+
+    // Adicionar SIP à proposta
+    const addSIPToProposal = () => {
+        if (!sipResult) return;
+
+        const newItem: ProposalItem = {
+            description: sipPlan,
+            setup: sipResult.setup,
+            monthly: sipResult.monthly
+        };
+
+        setProposalItems(prev => [...prev, newItem]);
+    };
+
+    // Calcular totais da proposta
+    const totalSetup = proposalItems.reduce((sum, item) => sum + item.setup, 0);
+    const totalMonthly = proposalItems.reduce((sum, item) => sum + item.monthly, 0);
+
+    // Formatação de moeda
+    const formatCurrency = (value: number) =>
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+    // Função para salvar proposta
     const saveProposal = () => {
-        if (viewMode === 'create' || viewMode === 'edit') {
-            const proposalToSave: Proposal = {
-                ...(currentProposal as Proposal),
-                clientName,
-                accountManager,
-                products: addedProducts,
-                totalSetup,
-                totalMonthly,
-                date: currentProposal?.date || new Date().toLocaleDateString('pt-BR')
-            };
-
-            if (viewMode === 'create') {
-                setProposals(prev => [...prev, proposalToSave]);
-            } else {
-                setProposals(prev => prev.map(p => p.id === proposalToSave.id ? proposalToSave : p));
-            }
-
-            setViewMode('search');
-            setCurrentProposal(null);
-            clearForm();
+        if (proposalItems.length === 0) {
+            alert('Adicione pelo menos um item à proposta antes de salvar.');
+            return;
         }
+
+        if (!clientData.name || !clientData.email || !accountManagerData.name) {
+            alert('Preencha os dados obrigatórios do cliente e gerente de contas.');
+            return;
+        }
+
+        const newProposal: Proposal = {
+            id: `PROP-${Date.now()}`,
+            client: clientData,
+            accountManager: accountManagerData,
+            items: proposalItems,
+            totalSetup,
+            totalMonthly,
+            createdAt: new Date().toISOString()
+        };
+
+        setSavedProposals(prev => [newProposal, ...prev]);
+
+        // Salvar no localStorage
+        const existingProposals = JSON.parse(localStorage.getItem('pabx-sip-proposals') || '[]');
+        existingProposals.unshift(newProposal);
+        localStorage.setItem('pabx-sip-proposals', JSON.stringify(existingProposals));
+
+        alert(`Proposta ${newProposal.id} salva com sucesso!`);
+
+        // Resetar formulário
+        setProposalItems([]);
+        setClientData({ name: '', email: '', phone: '' });
+        setAccountManagerData({ name: '', email: '', phone: '' });
+        setCurrentView('search');
     };
 
-    const cancelAction = () => {
-        setViewMode('search');
-        setCurrentProposal(null);
-        clearForm();
-    };
+    // Carregar propostas do localStorage
+    useEffect(() => {
+        const saved = JSON.parse(localStorage.getItem('pabx-sip-proposals') || '[]');
+        setSavedProposals(saved);
+    }, []);
 
-    const filteredProposals = (proposals || []).filter(p =>
-        p.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.id.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Calcular automaticamente quando os valores mudarem
+    useEffect(() => {
+        calculatePABX();
+    }, [pabxExtensions, pabxIncludeSetup, pabxIncludeDevices, pabxDeviceQuantity, pabxIncludeAI, pabxAIPlan]);
 
-    const handlePrint = () => window.print();
+    useEffect(() => {
+        calculateSIP();
+    }, [sipPlan, sipIncludeSetup, sipAdditionalChannels, sipWithEquipment]);
 
-    return (
-        <>
-            <div className="p-4 md:p-8 print-hide">
-                {viewMode === 'search' ? (
+    // Se estiver na tela de formulário do cliente, mostrar o formulário
+    if (currentView === 'client-form') {
+        return (
+            <div className="container mx-auto p-6 bg-slate-950 text-white min-h-screen">
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-white mb-2">Nova Proposta</h1>
+                    <p className="text-slate-400">Preencha os dados do cliente e gerente de contas.</p>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Dados do Cliente */}
                     <Card className="bg-slate-900/80 border-slate-800 text-white">
                         <CardHeader>
-                            <CardTitle>Buscar Propostas</CardTitle>
-                            <CardDescription>Encontre propostas existentes ou crie uma nova.</CardDescription>
+                            <CardTitle>Dados do Cliente</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div className="flex gap-4 mb-4">
+                        <CardContent className="space-y-4">
+                            <div>
+                                <Label htmlFor="client-name">Nome do Cliente *</Label>
+                                <Input
+                                    id="client-name"
+                                    value={clientData.name}
+                                    onChange={(e) => setClientData(prev => ({ ...prev, name: e.target.value }))}
+                                    className="bg-slate-800 border-slate-700 text-white"
+                                    placeholder="Nome completo do cliente"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="client-email">Email do Cliente *</Label>
+                                <Input
+                                    id="client-email"
+                                    type="email"
+                                    value={clientData.email}
+                                    onChange={(e) => setClientData(prev => ({ ...prev, email: e.target.value }))}
+                                    className="bg-slate-800 border-slate-700 text-white"
+                                    placeholder="email@cliente.com"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="client-phone">Telefone do Cliente</Label>
+                                <Input
+                                    id="client-phone"
+                                    value={clientData.phone}
+                                    onChange={(e) => setClientData(prev => ({ ...prev, phone: e.target.value }))}
+                                    className="bg-slate-800 border-slate-700 text-white"
+                                    placeholder="(11) 99999-9999"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Dados do Gerente de Contas */}
+                    <Card className="bg-slate-900/80 border-slate-800 text-white">
+                        <CardHeader>
+                            <CardTitle>Dados do Gerente de Contas</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div>
+                                <Label htmlFor="manager-name">Nome do Gerente *</Label>
+                                <Input
+                                    id="manager-name"
+                                    value={accountManagerData.name}
+                                    onChange={(e) => setAccountManagerData(prev => ({ ...prev, name: e.target.value }))}
+                                    className="bg-slate-800 border-slate-700 text-white"
+                                    placeholder="Nome completo do gerente"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="manager-email">Email do Gerente *</Label>
+                                <Input
+                                    id="manager-email"
+                                    type="email"
+                                    value={accountManagerData.email}
+                                    onChange={(e) => setAccountManagerData(prev => ({ ...prev, email: e.target.value }))}
+                                    className="bg-slate-800 border-slate-700 text-white"
+                                    placeholder="gerente@empresa.com"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="manager-phone">Telefone do Gerente</Label>
+                                <Input
+                                    id="manager-phone"
+                                    value={accountManagerData.phone}
+                                    onChange={(e) => setAccountManagerData(prev => ({ ...prev, phone: e.target.value }))}
+                                    className="bg-slate-800 border-slate-700 text-white"
+                                    placeholder="(11) 99999-9999"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <div className="flex justify-between mt-8">
+                    <Button
+                        variant="outline"
+                        onClick={() => setCurrentView('search')}
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                    >
+                        ← Voltar
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            if (!clientData.name || !clientData.email || !accountManagerData.name || !accountManagerData.email) {
+                                alert('Preencha os campos obrigatórios marcados com *');
+                                return;
+                            }
+                            setCurrentView('calculator');
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700"
+                    >
+                        Continuar para Calculadora →
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
+    // Se estiver na tela de busca, mostrar a tela de buscar propostas
+    if (currentView === 'search') {
+        return (
+            <div className="container mx-auto p-6 bg-slate-950 text-white min-h-screen">
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-white mb-2">Buscar Propostas</h1>
+                    <p className="text-slate-400">Encontre propostas existentes ou crie uma nova.</p>
+                </div>
+
+                <Card className="bg-slate-900/80 border-slate-800 text-white mb-6">
+                    <CardContent className="p-6">
+                        <div className="flex gap-4 items-center">
+                            <div className="flex-1">
                                 <Input
                                     type="text"
                                     placeholder="Buscar por cliente ou ID..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="bg-slate-800 border-slate-700 text-white"
+                                    className="bg-slate-800 border-slate-700 text-white placeholder-slate-400"
                                 />
-                                <Button onClick={createNewProposal} className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4 mr-2" />Nova Proposta</Button>
                             </div>
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="border-slate-700">
-                                            <TableHead className="text-white">ID</TableHead>
-                                            <TableHead className="text-white">Cliente</TableHead>
-                                            <TableHead className="text-white">Data</TableHead>
-                                            <TableHead className="text-white">Total Mensal</TableHead>
-                                            <TableHead className="text-white">Ações</TableHead>
+                            <Button
+                                onClick={() => setCurrentView('client-form')}
+                                className="bg-blue-600 hover:bg-blue-700 px-6"
+                            >
+                                + Nova Proposta
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Tabela de propostas */}
+                <Card className="bg-slate-900/80 border-slate-800 text-white">
+                    <CardContent className="p-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="border-slate-700">
+                                    <TableHead className="text-slate-300 font-semibold">ID</TableHead>
+                                    <TableHead className="text-slate-300 font-semibold">Cliente</TableHead>
+                                    <TableHead className="text-slate-300 font-semibold">Data</TableHead>
+                                    <TableHead className="text-slate-300 font-semibold">Total Mensal</TableHead>
+                                    <TableHead className="text-slate-300 font-semibold">Ações</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {savedProposals.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center py-8 text-slate-400">
+                                            Nenhuma proposta encontrada. Clique em "Nova Proposta" para começar.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    savedProposals.map((proposal) => (
+                                        <TableRow key={proposal.id} className="border-slate-800 hover:bg-slate-800/50">
+                                            <TableCell className="text-slate-300">{proposal.id}</TableCell>
+                                            <TableCell className="text-slate-300">{proposal.client.name}</TableCell>
+                                            <TableCell className="text-slate-300">{new Date(proposal.createdAt).toLocaleDateString('pt-BR')}</TableCell>
+                                            <TableCell className="text-slate-300">{formatCurrency(proposal.totalMonthly)}</TableCell>
+                                            <TableCell>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                                                    onClick={() => {
+                                                        // Carregar dados da proposta para edição
+                                                        setClientData(proposal.client);
+                                                        setAccountManagerData(proposal.accountManager);
+                                                        setProposalItems(proposal.items);
+                                                        setCurrentView('calculator');
+                                                    }}
+                                                >
+                                                    Editar
+                                                </Button>
+                                            </TableCell>
                                         </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {filteredProposals.map(p => (
-                                            <TableRow key={p.id} className="border-slate-800">
-                                                <TableCell>{p.id}</TableCell>
-                                                <TableCell>{p.clientName}</TableCell>
-                                                <TableCell>{p.date}</TableCell>
-                                                <TableCell>{formatCurrency(p.totalMonthly)}</TableCell>
-                                                <TableCell><Button variant="outline" size="sm" onClick={() => editProposal(p)}><Edit className="h-4 w-4" /></Button></TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    // Tela da calculadora
+    return (
+        <div className="container mx-auto p-4 bg-slate-950 text-white">
+            <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-white">Calculadora PABX/SIP</h1>
+                        <p className="text-slate-400 mt-2">Configure e calcule os custos para PABX em Nuvem e SIP Trunk</p>
+                    </div>
+                    <Button
+                        variant="outline"
+                        onClick={() => setCurrentView('search')}
+                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                    >
+                        ← Voltar para Buscar
+                    </Button>
+                </div>
+
+                {/* Informações do Cliente e Gerente */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <Card className="bg-slate-900/50 border-slate-800">
+                        <CardContent className="p-4">
+                            <h3 className="font-semibold text-white mb-2">Cliente</h3>
+                            <p className="text-slate-300 text-sm">{clientData.name}</p>
+                            <p className="text-slate-400 text-xs">{clientData.email}</p>
+                            {clientData.phone && <p className="text-slate-400 text-xs">{clientData.phone}</p>}
                         </CardContent>
                     </Card>
-                ) : (
-                    <>
-                        <Card className="bg-slate-900/80 border-slate-800 text-white mb-6">
+                    <Card className="bg-slate-900/50 border-slate-800">
+                        <CardContent className="p-4">
+                            <h3 className="font-semibold text-white mb-2">Gerente de Contas</h3>
+                            <p className="text-slate-300 text-sm">{accountManagerData.name}</p>
+                            <p className="text-slate-400 text-xs">{accountManagerData.email}</p>
+                            {accountManagerData.phone && <p className="text-slate-400 text-xs">{accountManagerData.phone}</p>}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            <Tabs defaultValue="calculator" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 bg-slate-800 text-slate-400">
+                    <TabsTrigger value="calculator">Calculadora</TabsTrigger>
+                    <TabsTrigger value="list-price">List Price</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="calculator">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                        {/* PABX em Nuvem */}
+                        <Card className="bg-slate-900/80 border-slate-800 text-white">
                             <CardHeader>
-                                <CardTitle>{viewMode === 'create' ? 'Criar Nova Proposta' : 'Editar Proposta'}</CardTitle>
-                                <CardDescription>ID da Proposta: {currentProposal?.id}</CardDescription>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Phone className="h-5 w-5" />
+                                    PABX em Nuvem
+                                </CardTitle>
                             </CardHeader>
-                            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <Label htmlFor="client-name">Nome do Cliente</Label>
-                                    <Input id="client-name" value={clientName} onChange={(e) => setClientName(e.target.value)} className="bg-slate-800 border-slate-700" />
+                            <CardContent className="space-y-4">
+                                <div>
+                                    <Label htmlFor="pabx-extensions">Quantidade de Ramais</Label>
+                                    <Input
+                                        id="pabx-extensions"
+                                        type="number"
+                                        value={pabxExtensions}
+                                        onChange={(e) => setPabxExtensions(parseInt(e.target.value) || 0)}
+                                        className="bg-slate-800 border-slate-700 text-white"
+                                    />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="account-manager">Gerente de Contas</Label>
-                                    <Input id="account-manager" value={accountManager} onChange={(e) => setAccountManager(e.target.value)} className="bg-slate-800 border-slate-700" />
+
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="pabx-include-setup"
+                                        checked={pabxIncludeSetup}
+                                        onCheckedChange={(checked) => setPabxIncludeSetup(checked as boolean)}
+                                    />
+                                    <Label htmlFor="pabx-include-setup">Incluir Taxa de Setup</Label>
                                 </div>
+
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="pabx-include-devices"
+                                        checked={pabxIncludeDevices}
+                                        onCheckedChange={(checked) => setPabxIncludeDevices(checked as boolean)}
+                                    />
+                                    <Label htmlFor="pabx-include-devices">Incluir Aparelhos (Ramais Físicos)</Label>
+                                </div>
+
+                                {pabxIncludeDevices && (
+                                    <div>
+                                        <Label htmlFor="pabx-device-quantity">Quantidade de Aparelhos</Label>
+                                        <Input
+                                            id="pabx-device-quantity"
+                                            type="number"
+                                            value={pabxDeviceQuantity}
+                                            onChange={(e) => setPabxDeviceQuantity(parseInt(e.target.value) || 0)}
+                                            className="bg-slate-800 border-slate-700 text-white"
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="pabx-include-ai"
+                                        checked={pabxIncludeAI}
+                                        onCheckedChange={(checked) => setPabxIncludeAI(checked as boolean)}
+                                    />
+                                    <Label htmlFor="pabx-include-ai">Incluir Agente IA</Label>
+                                </div>
+
+                                {pabxIncludeAI && (
+                                    <div>
+                                        <Label>Plano de Agente IA</Label>
+                                        <Select value={pabxAIPlan} onValueChange={setPabxAIPlan}>
+                                            <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="bg-slate-800 border-slate-700">
+                                                <SelectItem value="20K">20K</SelectItem>
+                                                <SelectItem value="40K">40K</SelectItem>
+                                                <SelectItem value="60K">60K</SelectItem>
+                                                <SelectItem value="100K">100K</SelectItem>
+                                                <SelectItem value="150K">150K</SelectItem>
+                                                <SelectItem value="200K">200K</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+
+                                {pabxIncludeAI && (
+                                    <div className="text-sm text-slate-400">
+                                        <p>Tenha até:</p>
+                                        <p>50.000 mensagens* ou</p>
+                                        <p>10.000 minutos** ou</p>
+                                        <p>5.000 voz premium*** ou</p>
+                                        <p className="text-xs mt-1">*Opções acima combinadas</p>
+                                    </div>
+                                )}
+
+                                {/* Resultado PABX */}
+                                {pabxResult && (
+                                    <div className="bg-slate-800 p-4 rounded-lg">
+                                        <h3 className="font-semibold mb-2">Resultado PABX:</h3>
+                                        <div className="space-y-1 text-sm">
+                                            <div className="flex justify-between">
+                                                <span>Taxa de Setup:</span>
+                                                <span>{formatCurrency(pabxResult.setup)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span>Mensalidade Base:</span>
+                                                <span>{formatCurrency(pabxResult.baseMonthly)}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span>Aluguel de Aparelhos:</span>
+                                                <span>{formatCurrency(pabxResult.deviceRentalCost)}</span>
+                                            </div>
+                                            {pabxResult.aiAgentCost > 0 && (
+                                                <div className="flex justify-between">
+                                                    <span>Agente IA:</span>
+                                                    <span>{formatCurrency(pabxResult.aiAgentCost)}</span>
+                                                </div>
+                                            )}
+                                            <Separator className="my-2 bg-slate-600" />
+                                            <div className="flex justify-between font-semibold text-green-400">
+                                                <span>Total Mensal:</span>
+                                                <span>{formatCurrency(pabxResult.totalMonthly)}</span>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            className="w-full mt-3 bg-green-600 hover:bg-green-700"
+                                            onClick={addPABXToProposal}
+                                        >
+                                            Adicionar à Proposta
+                                        </Button>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
 
-                        <div>
-                            <Tabs defaultValue="calculator" className="w-full">
-                                <TabsList className="grid w-full grid-cols-2 bg-slate-800">
-                                    <TabsTrigger value="calculator">Calculadora</TabsTrigger>
-                                    <TabsTrigger value="list-price">List Price</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="calculator">
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-6">
-                                        {/* Calculadora PABX */}
-                                        <Card className="bg-slate-900/80 border-slate-800 text-white">
-                                            <CardHeader>
-                                                <CardTitle className="flex items-center"><Phone className="mr-2" />PABX em Nuvem</CardTitle>
-                                            </CardHeader>
-                                            <CardContent>
-                                                <div className="space-y-4">
-                                                    <div>
-                                                        <Label htmlFor="pabx-extensions">Quantidade de Ramais</Label>
-                                                        <Input id="pabx-extensions" type="number" value={pabxExtensions} onChange={e => setPabxExtensions(Number(e.target.value))} className="bg-slate-700" />
-                                                    </div>
-                                                    <div className="flex items-center space-x-2 pt-2">
-                                                        <Checkbox id="pabxIncludeSetup" checked={pabxIncludeSetup} onCheckedChange={(checked) => setPabxIncludeSetup(!!checked)} className="border-white" />
-                                                        <label htmlFor="pabxIncludeSetup" className="text-sm font-medium leading-none">Incluir Taxa de Setup</label>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2 pt-2">
-                                                        <Checkbox id="pabxIncludeDevices" checked={pabxIncludeDevices} onCheckedChange={(checked) => setPabxIncludeDevices(Boolean(checked))} />
-                                                        <Label htmlFor="pabxIncludeDevices">Incluir Aparelhos (Ramais Físicos)</Label>
-                                                    </div>
-                                                    {pabxIncludeDevices && (
-                                                        <div className="pl-6 mt-2">
-                                                            <Label htmlFor="pabx-device-quantity">Quantidade de Aparelhos</Label>
-                                                            <Input id="pabx-device-quantity" type="number" value={pabxDeviceQuantity} onChange={(e) => setPabxDeviceQuantity(Number(e.target.value))} min="0" className="bg-slate-700 border-slate-600 mt-1" />
-                                                        </div>
-                                                    )}
-                                                    <div className="flex items-center space-x-2 mt-4">
-                                                        <Checkbox id="includeAIAgent" checked={includeAIAgent} onCheckedChange={(checked) => setIncludeAIAgent(Boolean(checked))} />
-                                                        <Label htmlFor="includeAIAgent">Incluir Agente IA</Label>
-                                                    </div>
-                                                    {includeAIAgent && (
-                                                        <div className="pl-6 mt-2">
-                                                            <Label htmlFor="aiAgentPlan">Plano de Agente IA</Label>
-                                                            <Select onValueChange={setSelectedAIAgentPlan} value={selectedAIAgentPlan}>
-                                                                <SelectTrigger id="aiAgentPlan" className="bg-slate-700 border-slate-600">
-                                                                    <SelectValue placeholder="Selecione um plano de créditos" />
-                                                                </SelectTrigger>
-                                                                <SelectContent className="bg-slate-800 text-white">
-                                                                    {Object.entries(aiAgentPlans).map(([key, plan]) => (
-                                                                        <SelectItem key={key} value={key}>{plan.name}</SelectItem>
-                                                                    ))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                            {selectedAIAgentPlan && aiAgentPlans[selectedAIAgentPlan] && (
-                                                                <div className="mt-4 p-3 bg-slate-800/50 rounded-lg text-sm text-slate-300">
-                                                                    <p className="font-bold text-white mb-2">Tenha até:</p>
-                                                                    <p>{aiAgentPlans[selectedAIAgentPlan].messages}</p>
-                                                                    <p>{aiAgentPlans[selectedAIAgentPlan].minutes}</p>
-                                                                    <p>{aiAgentPlans[selectedAIAgentPlan].premiumVoice}</p>
-                                                                    <p className="text-xs text-slate-400 mt-2">Opções acima combinadas</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </CardContent>
-                                            <CardFooter className="flex-col items-start">
-                                                {pabxResult && (
-                                                    <div className="w-full">
-                                                        <Separator className="bg-slate-700 my-4" />
-                                                        <div className="text-lg font-bold mb-2">Resultado PABX:</div>
-                                                        <div className="flex justify-between"><span>Taxa de Setup:</span> <span>{formatCurrency(pabxResult.setup)}</span></div>
-                                                        <div className="flex justify-between"><span>Mensalidade Base:</span> <span>{formatCurrency(pabxResult.baseMonthly)}</span></div>
-                                                        {pabxResult.deviceRentalCost > 0 && (
-                                                            <div className="flex justify-between"><span>Aluguel de Aparelhos:</span> <span>{formatCurrency(pabxResult.deviceRentalCost)}</span></div>
-                                                        )}
-                                                        {pabxResult.aiAgentCost > 0 && (
-                                                            <div className="flex justify-between"><span>Agente IA:</span> <span>{formatCurrency(pabxResult.aiAgentCost)}</span></div>
-                                                        )}
-                                                        <div className="flex justify-between text-green-400 font-bold mt-2"><span>Total Mensal:</span> <span>{formatCurrency(pabxResult.baseMonthly + pabxResult.deviceRentalCost + pabxResult.aiAgentCost)}</span></div>
-                                                        <Button onClick={handleAddPabxProduct} className="w-full mt-4 bg-green-600 hover:bg-green-700">Adicionar à Proposta</Button>
-                                                    </div>
-                                                )}
-                                            </CardFooter>
-                                        </Card>
+                        {/* SIP Trunk */}
+                        <Card className="bg-slate-900/80 border-slate-800 text-white">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <PhoneForwarded className="h-5 w-5" />
+                                    SIP Trunk
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div>
+                                    <Label>Plano SIP</Label>
+                                    <Select value={sipPlan} onValueChange={setSipPlan}>
+                                        <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-800 border-slate-700">
+                                            <SelectItem value="SIP ILIMITADO 10 Canais">SIP ILIMITADO 10 Canais</SelectItem>
+                                            <SelectItem value="SIP ILIMITADO 20 Canais">SIP ILIMITADO 20 Canais</SelectItem>
+                                            <SelectItem value="SIP ILIMITADO 30 Canais">SIP ILIMITADO 30 Canais</SelectItem>
+                                            <SelectItem value="SIP TARIFADO 4 Canais">SIP TARIFADO 4 Canais</SelectItem>
+                                            <SelectItem value="SIP TARIFADO 10 Canais">SIP TARIFADO 10 Canais</SelectItem>
+                                            <SelectItem value="SIP TARIFADO 30 Canais">SIP TARIFADO 30 Canais</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                                        {/* Calculadora SIP */}
-                                        <Card className="bg-slate-900/80 border-slate-800 text-white">
-                                            <CardHeader>
-                                                <CardTitle className="flex items-center"><PhoneForwarded className="mr-2" />SIP Trunk</CardTitle>
-                                            </CardHeader>
-                                            <CardContent>
-                                                <div className="space-y-4">
-                                                    <div>
-                                                        <Label htmlFor="sip-plan">Plano SIP</Label>
-                                                        <Select onValueChange={setSelectedSipPlan} value={selectedSipPlan}>
-                                                            <SelectTrigger className="bg-slate-700">
-                                                                <SelectValue placeholder="Selecione um plano" />
-                                                            </SelectTrigger>
-                                                            <SelectContent className="bg-slate-800 text-white">
-                                                                {sipPlans.map((plan) => (
-                                                                    <SelectItem key={plan.name} value={plan.name}>{plan.name}</SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2 pt-2">
-                                                        <Checkbox id="sipIncludeSetup" checked={sipIncludeSetup} onCheckedChange={(checked) => setSipIncludeSetup(!!checked)} className="border-white" />
-                                                        <label htmlFor="sipIncludeSetup" className="text-sm font-medium leading-none">Incluir Taxa de Setup</label>
-                                                    </div>
-                                                    <div>
-                                                        <Label htmlFor="sip-additional-channels">Canais Adicionais</Label>
-                                                        <Input id="sip-additional-channels" type="number" value={sipAdditionalChannels || ''} onChange={(e) => setSipAdditionalChannels(Number(e.target.value))} min="0" className="bg-slate-700 border-slate-600 mt-1" />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label className={!selectedSipPlan || !sipPlans.find(p => p.name === selectedSipPlan)?.monthlyWithEquipment ? 'text-gray-500' : ''}>
-                                                            Franquia/Assinatura Mensal
-                                                        </Label>
-                                                        <RadioGroup
-                                                            value={sipWithEquipment ? 'with' : 'without'}
-                                                            onValueChange={(value) => setSipWithEquipment(value === 'with')}
-                                                        >
-                                                            <div className="flex items-center space-x-2">
-                                                                <RadioGroupItem value="without" id="without-equipment" />
-                                                                <Label htmlFor="without-equipment">Sem Equipamentos</Label>
-                                                            </div>
-                                                            <div className="flex items-center space-x-2">
-                                                                <RadioGroupItem 
-                                                                    value="with" 
-                                                                    id="with-equipment" 
-                                                                    disabled={!selectedSipPlan || !sipPlans.find(p => p.name === selectedSipPlan)?.monthlyWithEquipment}
-                                                                />
-                                                                <Label 
-                                                                    htmlFor="with-equipment" 
-                                                                    className={!selectedSipPlan || !sipPlans.find(p => p.name === selectedSipPlan)?.monthlyWithEquipment ? 'text-gray-500' : ''}
-                                                                >
-                                                                    Com Equipamentos
-                                                                </Label>
-                                                            </div>
-                                                        </RadioGroup>
-                                                    </div>
-                                                </div>
-                                            </CardContent>
-                                            <CardFooter className="flex-col items-start">
-                                                {sipResult && (
-                                                    <div className="w-full">
-                                                        <Separator className="bg-slate-700 my-4" />
-                                                        <div className="text-lg font-bold mb-2">Resultado SIP:</div>
-                                                        <div className="flex justify-between"><span>Taxa de Setup:</span> <span>{formatCurrency(sipResult.setup)}</span></div>
-                                                        <div className="flex justify-between text-green-400 font-bold mt-2"><span>Total Mensal:</span> <span>{formatCurrency(sipResult.monthly)}</span></div>
-                                                        <Button onClick={handleAddSipProduct} className="w-full mt-4 bg-green-600 hover:bg-green-700">Adicionar à Proposta</Button>
-                                                    </div>
-                                                )}
-                                            </CardFooter>
-                                        </Card>
-                                    </div>
-                                </TabsContent>
-                                <TabsContent value="list-price">
-                                    <Card className="bg-slate-900/80 border-slate-800 text-white mt-6">
-                                        <CardHeader>
-                                            <CardTitle>Tabela de Preços (List Price)</CardTitle>
-                                            <CardDescription>Valores de referência para os serviços.</CardDescription>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="space-y-12">
-                                                {/* Tabela PABX em Nuvem */}
-                                                <div>
-                                                    <h3 className="text-xl font-semibold mb-4">PABX em Nuvem</h3>
-                                                    <div className="overflow-x-auto">
-                                                        <Table className="min-w-full border-collapse">
-                                                            <TableHeader>
-                                                                <TableRow className="bg-yellow-400">
-                                                                    {pabxListPriceData.headers.map(header => <TableHead key={header} className="text-black font-bold border border-slate-500 px-2 py-1">{header}</TableHead>)}
-                                                                </TableRow>
-                                                            </TableHeader>
-                                                            <TableBody>
-                                                                {pabxListPriceData.rows.map(row => (
-                                                                    <TableRow key={row.service} className="border-slate-800">
-                                                                        <TableCell className="font-semibold border border-slate-600 px-2 py-1">{row.service}</TableCell>
-                                                                        {row.values.map((value, index) => <TableCell key={index} className="border border-slate-700 text-center px-2 py-1">{value}</TableCell>)}
-                                                                    </TableRow>
-                                                                ))}
-                                                            </TableBody>
-                                                        </Table>
-                                                    </div>
-                                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="sip-include-setup"
+                                        checked={sipIncludeSetup}
+                                        onCheckedChange={(checked) => setSipIncludeSetup(checked as boolean)}
+                                    />
+                                    <Label htmlFor="sip-include-setup">Incluir Taxa de Setup</Label>
+                                </div>
 
-                                                {/* Tabela SIP Trunk */}
-                                                <div>
-                                                    <h3 className="text-xl font-semibold mb-4">SIP Trunk</h3>
-                                                    <div className="overflow-x-auto pb-2">
-                                                        <Table className="min-w-full border-collapse">
-                                                            <TableHeader>
-                                                                <TableRow className="bg-blue-900">
-                                                                    <TableHead rowSpan={2} className="text-white font-bold border-r border-b border-slate-500 align-middle text-center p-2">SIP TRUNK</TableHead>
-                                                                    {sipListPriceData.headers.top.map(header => (
-                                                                        <TableHead key={header.title} colSpan={header.span} className="text-white font-bold border-b border-slate-500 text-center p-2">{header.title}</TableHead>
-                                                                    ))}
-                                                                </TableRow>
-                                                                <TableRow className="bg-blue-800">
-                                                                    {sipListPriceData.headers.bottom.map(header => (
-                                                                        <TableHead key={header} className="text-white font-semibold border-r border-slate-600 text-center p-2">{header}</TableHead>
-                                                                    ))}
-                                                                </TableRow>
-                                                            </TableHeader>
-                                                            <TableBody>
-                                                                {sipListPriceData.rows.map(row => (
-                                                                    <TableRow key={row.service} className="border-slate-800">
-                                                                        <TableCell className="font-semibold border border-slate-600 p-2">{row.service}</TableCell>
-                                                                        {row.values.map((cell, index) => {
-                                                                            if (typeof cell === 'object' && cell !== null) {
-                                                                                return <TableCell key={index} colSpan={cell.span} className="border border-slate-700 text-center p-2">{cell.value}</TableCell>;
-                                                                            }
-                                                                            return <TableCell key={index} className="border border-slate-700 text-center p-2">{cell as React.ReactNode}</TableCell>;
-                                                                        })}
-                                                                    </TableRow>
-                                                                ))}
-                                                            </TableBody>
-                                                        </Table>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <div className="bg-gradient-to-r from-blue-600 to-cyan-400 rounded-t-lg p-4 mb-6">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-bold">
-                                                                Agente de IA
-                                                            </div>
-                                                            <div className="text-white">
-                                                                <h3 className="text-xl font-bold">Créditos de Interação</h3>
-                                                                <p className="text-sm opacity-90">Por mensagem, ligação e voz premium</p>
-                                                            </div>
-                                                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center">
-                                                                <div className="w-12 h-12 bg-blue-900 rounded-full flex items-center justify-center">
-                                                                    <div className="w-8 h-8 bg-blue-600 rounded-full"></div>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                <div>
+                                    <Label htmlFor="sip-additional-channels">Canais Adicionais</Label>
+                                    <Input
+                                        id="sip-additional-channels"
+                                        type="number"
+                                        value={sipAdditionalChannels}
+                                        onChange={(e) => setSipAdditionalChannels(parseInt(e.target.value) || 0)}
+                                        className="bg-slate-800 border-slate-700 text-white"
+                                    />
+                                </div>
 
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                                                        {Object.values(aiAgentPlans).map((plan, index) => (
-                                                            <div key={index} className="bg-slate-100 rounded-lg overflow-hidden shadow-lg">
-                                                                {/* Círculo com o nome do plano */}
-                                                                <div className="flex justify-center pt-6 pb-4">
-                                                                    <div className={`w-20 h-20 ${plan.color} rounded-full flex items-center justify-center text-white font-bold text-lg`}>
-                                                                        {plan.name}
-                                                                    </div>
-                                                                </div>
+                                <div>
+                                    <Label>Franquia/Assinatura Mensal</Label>
+                                    <RadioGroup value={sipWithEquipment ? "com" : "sem"} onValueChange={(value) => setSipWithEquipment(value === "com")}>
+                                        <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="sem" id="sem-equipamentos" />
+                                            <Label htmlFor="sem-equipamentos">Sem Equipamentos</Label>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="com" id="com-equipamentos" />
+                                            <Label htmlFor="com-equipamentos">Com Equipamentos</Label>
+                                        </div>
+                                    </RadioGroup>
+                                </div>
 
-                                                                {/* Créditos */}
-                                                                <div className="px-4 pb-2 text-center">
-                                                                    <p className="text-xs text-gray-600 font-medium">{plan.credits}</p>
-                                                                </div>
-
-                                                                {/* Seção "Tenha até:" */}
-                                                                <div className="bg-gray-200 px-4 py-2">
-                                                                    <p className="text-sm font-bold text-gray-800 text-center">Tenha até:</p>
-                                                                </div>
-
-                                                                {/* Detalhes */}
-                                                                <div className="px-4 py-3 space-y-2">
-                                                                    <div className="bg-gray-300 px-3 py-2 rounded text-xs text-gray-800 text-center">
-                                                                        {plan.messages}
-                                                                    </div>
-                                                                    <div className="bg-gray-300 px-3 py-2 rounded text-xs text-gray-800 text-center">
-                                                                        {plan.minutes}
-                                                                    </div>
-                                                                    <div className="bg-gray-300 px-3 py-2 rounded text-xs text-gray-800 text-center">
-                                                                        {plan.premiumVoice}
-                                                                    </div>
-                                                                    <div className="bg-gray-300 px-3 py-2 rounded text-xs text-gray-600 text-center">
-                                                                        Opções acima combinadas
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Preço */}
-                                                                <div className="bg-gray-800 px-4 py-3 text-center">
-                                                                    <p className="text-lg font-bold text-white">{formatCurrency(plan.monthlyCost)}</p>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-
-                                                    {/* Legendas */}
-                                                    <div className="text-center mt-6 text-xs text-gray-600 space-y-1">
-                                                        <p>✧ *2 créditos por mensagem</p>
-                                                        <p>✧ **10 créditos por minuto (voz padrão)</p>
-                                                        <p>✧ ***20 créditos por minuto (voz premium)</p>
-                                                    </div>
-                                                </div>
+                                {/* Resultado SIP */}
+                                {sipResult && (
+                                    <div className="bg-slate-800 p-4 rounded-lg">
+                                        <h3 className="font-semibold mb-2">Resultado SIP:</h3>
+                                        <div className="space-y-1 text-sm">
+                                            <div className="flex justify-between">
+                                                <span>Taxa de Setup:</span>
+                                                <span>{formatCurrency(sipResult.setup)}</span>
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                </TabsContent>
-                            </Tabs>
-                        </div>
+                                            <Separator className="my-2 bg-slate-600" />
+                                            <div className="flex justify-between font-semibold text-green-400">
+                                                <span>Total Mensal:</span>
+                                                <span>{formatCurrency(sipResult.monthly)}</span>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            className="w-full mt-3 bg-green-600 hover:bg-green-700"
+                                            onClick={addSIPToProposal}
+                                        >
+                                            Adicionar à Proposta
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="w-full mt-2 border-slate-600 text-slate-300 hover:bg-slate-700"
+                                        >
+                                            Ajustes do Sistema
+                                        </Button>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
 
+                    {/* Resumo da Proposta */}
+                    {proposalItems.length > 0 && (
                         <Card className="bg-slate-900/80 border-slate-800 text-white mt-6">
                             <CardHeader>
                                 <CardTitle>Resumo da Proposta</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <Table>
-                                    <TableHeader><TableRow className="border-slate-700"><TableHead className="text-white">Descrição</TableHead><TableHead className="text-white">Setup</TableHead><TableHead className="text-white">Mensal</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                                    <TableHeader>
+                                        <TableRow className="border-slate-700">
+                                            <TableHead className="text-white">Descrição</TableHead>
+                                            <TableHead className="text-white text-right">Setup</TableHead>
+                                            <TableHead className="text-white text-right">Mensal</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
                                     <TableBody>
-                                        {addedProducts.map(p => (
-                                            <TableRow key={p.id} className="border-slate-800">
-                                                <TableCell>{p.description}</TableCell>
-                                                <TableCell>{formatCurrency(p.setup)}</TableCell>
-                                                <TableCell>{formatCurrency(p.monthly)}</TableCell>
-                                                <TableCell><Button variant="destructive" size="sm" onClick={() => handleRemoveProduct(p.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                                        {proposalItems.map((item, index) => (
+                                            <TableRow key={index} className="border-slate-800">
+                                                <TableCell>{item.description}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(item.setup)}</TableCell>
+                                                <TableCell className="text-right">{formatCurrency(item.monthly)}</TableCell>
                                             </TableRow>
                                         ))}
+                                        <TableRow className="border-slate-700 font-semibold">
+                                            <TableCell>Total Setup:</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(totalSetup)}</TableCell>
+                                            <TableCell></TableCell>
+                                        </TableRow>
+                                        <TableRow className="border-slate-700 font-semibold">
+                                            <TableCell>Total Mensal:</TableCell>
+                                            <TableCell></TableCell>
+                                            <TableCell className="text-right">{formatCurrency(totalMonthly)}</TableCell>
+                                        </TableRow>
                                     </TableBody>
                                 </Table>
-                                <Separator className="bg-slate-700 my-4" />
-                                <div className="flex justify-end text-lg font-bold">
-                                    <div className="w-1/3 text-right">
-                                        <div className="flex justify-between"><span>Total Setup:</span> <span>{formatCurrency(totalSetup)}</span></div>
-                                        <div className="flex justify-between"><span>Total Mensal:</span> <span>{formatCurrency(totalMonthly)}</span></div>
-                                    </div>
+
+                                <div className="flex gap-2 mt-4">
+                                    <Button
+                                        className="bg-green-600 hover:bg-green-700"
+                                        onClick={saveProposal}
+                                    >
+                                        Salvar Proposta
+                                    </Button>
+                                    <Button className="bg-blue-600 hover:bg-blue-700">
+                                        Gerar PDF
+                                    </Button>
+                                    <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                                        Cancelar
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+                </TabsContent>
+
+                <TabsContent value="list-price">
+                    <div className="mt-6 space-y-6">
+                        {/* Tabela de Preços Agente IA */}
+                        <Card className="bg-slate-900/80 border-slate-800 text-white">
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-blue-400">Agente de IA</CardTitle>
+                                    <p className="text-slate-400 text-sm mt-1">Créditos de Interação</p>
+                                    <p className="text-slate-500 text-xs">Por mensagem, ligação e voz premium</p>
+                                </div>
+                                <Button
+                                    variant={isEditingAI ? "secondary" : "outline"}
+                                    size="sm"
+                                    onClick={() => setIsEditingAI(!isEditingAI)}
+                                    className="border-slate-600"
+                                >
+                                    {isEditingAI ? "Salvar" : "Editar"}
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                                    {Object.entries(aiAgentPrices).map(([plan, data]) => (
+                                        <div key={plan} className="bg-gradient-to-b from-blue-900/30 to-cyan-900/30 rounded-lg p-4 border border-slate-700">
+                                            <div className="text-center mb-4">
+                                                <div className="w-16 h-16 mx-auto bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-lg mb-2">
+                                                    {plan}
+                                                </div>
+                                                <p className="text-xs text-slate-400">{data.credits.toLocaleString()} Créditos de Interação</p>
+                                            </div>
+
+                                            <div className="space-y-2 text-xs text-slate-300 mb-4">
+                                                <p><strong>Tenha até:</strong></p>
+                                                <p>{(data.messages / 1000).toFixed(0)}.000 mensagens* ou</p>
+                                                <p>{(data.minutes / 1000).toFixed(0)}.000 minutos** ou</p>
+                                                <p>{(data.premium / 1000).toFixed(0)}.000 voz premium*** ou</p>
+                                                <p className="text-slate-500">Opções acima combinadas</p>
+                                            </div>
+
+                                            <div className="text-center">
+                                                {isEditingAI ? (
+                                                    <Input
+                                                        type="number"
+                                                        value={data.price}
+                                                        onChange={(e) => {
+                                                            const newPrice = parseFloat(e.target.value) || 0;
+                                                            setAiAgentPrices(prev => ({
+                                                                ...prev,
+                                                                [plan]: { ...prev[plan], price: newPrice }
+                                                            }));
+                                                        }}
+                                                        className="bg-slate-800 border-slate-600 text-center text-lg font-bold"
+                                                    />
+                                                ) : (
+                                                    <p className="text-lg font-bold text-white">{formatCurrency(data.price)}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-4 text-xs text-slate-500 space-y-1">
+                                    <p>* 1 crédito por mensagem</p>
+                                    <p>** 2 créditos por minuto (voz padrão)</p>
+                                    <p>*** 20 créditos por minuto (voz premium)</p>
                                 </div>
                             </CardContent>
                         </Card>
 
-                        <div className="flex justify-end gap-4 mt-8">
-                            <Button onClick={saveProposal} className="bg-green-600 hover:bg-green-700"><Save className="h-4 w-4 mr-2" />Salvar Proposta</Button>
-                            <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700" disabled={addedProducts.length === 0}><Download className="h-4 w-4 mr-2" />Gerar PDF</Button>
-                            <Button variant="outline" onClick={cancelAction}>Cancelar</Button>
-                        </div>
-                    </>
-                )}
-            </div >
+                        {/* Tabela de Preços SIP TRUNK */}
+                        <Card className="bg-slate-900/80 border-slate-800 text-white">
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <CardTitle className="text-blue-400">SIP TRUNK | Planos e preços</CardTitle>
+                                <Button
+                                    variant={isEditingSIP ? "secondary" : "outline"}
+                                    size="sm"
+                                    onClick={() => setIsEditingSIP(!isEditingSIP)}
+                                    className="border-slate-600"
+                                >
+                                    {isEditingSIP ? "Salvar" : "Editar"}
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="overflow-x-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="border-slate-700">
+                                                <TableHead rowSpan={3} className="text-white bg-blue-900 text-center align-middle">SIP TRUNK</TableHead>
+                                                <TableHead colSpan={2} className="text-white bg-blue-800 text-center">SIP TARIFADO</TableHead>
+                                                <TableHead colSpan={3} className="text-white bg-blue-700 text-center">SIP TARIFADO</TableHead>
+                                                <TableHead colSpan={5} className="text-white bg-blue-600 text-center">SIP ILIMITADO</TableHead>
+                                            </TableRow>
+                                            <TableRow className="border-slate-700">
+                                                <TableHead className="text-white bg-blue-800 text-center">Call Center</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center">Até 4 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center">De 5 a 10 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center">De 11 a 20 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center">Acima de 20 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center">Até 4 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center">De 5 a 10 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center">De 11 a 20 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center">De 21 a 30 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center">Acima de 30 Canais</TableHead>
+                                            </TableRow>
+                                            <TableRow className="border-slate-700">
+                                                <TableHead className="text-white bg-blue-800 text-center text-xs">2 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center text-xs">4 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center text-xs">10 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center text-xs">30 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center text-xs">60 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center text-xs">5 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center text-xs">10 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center text-xs">20 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center text-xs">30 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-600 text-center text-xs">60 canais</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Franquia/Assinatura Mensal (Sem Equipamentos)</TableCell>
+                                                {isEditingSIP ? (
+                                                    <>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 200" /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 150" /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 250" /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 350" /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 550" /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 350" /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 450" /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 650" /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 850" /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 1.600" /></TableCell>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <TableCell className="text-center">R$ 200</TableCell>
+                                                        <TableCell className="text-center">R$ 150</TableCell>
+                                                        <TableCell className="text-center">R$ 250</TableCell>
+                                                        <TableCell className="text-center">R$ 350</TableCell>
+                                                        <TableCell className="text-center">R$ 550</TableCell>
+                                                        <TableCell className="text-center">R$ 350</TableCell>
+                                                        <TableCell className="text-center">R$ 450</TableCell>
+                                                        <TableCell className="text-center">R$ 650</TableCell>
+                                                        <TableCell className="text-center">R$ 850</TableCell>
+                                                        <TableCell className="text-center">R$ 1.600</TableCell>
+                                                    </>
+                                                )}
+                                            </TableRow>
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Franquia/Assinatura Mensal (Com Equipamentos)</TableCell>
+                                                <TableCell className="text-center" colSpan={10}>
+                                                    {isEditingSIP ? (
+                                                        <Input className="bg-slate-800 text-center" defaultValue="R$ 500 (Franquia)" />
+                                                    ) : (
+                                                        "R$ 500 (Franquia)"
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Tarifa Local Fixo (por minuto)</TableCell>
+                                                <TableCell className="text-center" colSpan={5}>R$ 0,02 por minuto</TableCell>
+                                                <TableCell className="text-center" colSpan={5}>Ilimitado</TableCell>
+                                            </TableRow>
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Tarifa DDD Fixo (por minuto)</TableCell>
+                                                <TableCell className="text-center" colSpan={5}>R$ 0,06 por minuto</TableCell>
+                                                <TableCell className="text-center" colSpan={5}>Ilimitado</TableCell>
+                                            </TableRow>
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Tarifa Brasil Móvel (por minuto)</TableCell>
+                                                <TableCell className="text-center" colSpan={5}>R$ 0,10 por minuto</TableCell>
+                                                <TableCell className="text-center" colSpan={5}>R$ 0,10 por minuto</TableCell>
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </CardContent>
+                        </Card>
 
-            <div id="print-area" className="print-only">
-                {currentProposal && (
-                    <>
-                        <div className="print-header">
-                            <h1>Proposta Comercial</h1>
-                            <p><strong>Proposta ID:</strong> {currentProposal.id}</p>
-                            <p><strong>Cliente:</strong> {clientName}</p>
-                            <p><strong>Gerente:</strong> {accountManager}</p>
-                            <p><strong>Data:</strong> {currentProposal.date}</p>
-                        </div>
-                        <h2>Itens da Proposta</h2>
-                        <table className="print-table">
-                            <thead><tr><th>Descrição</th><th>Setup</th><th>Mensal</th></tr></thead>
-                            <tbody>
-                                {addedProducts.map(p => (
-                                    <tr key={p.id}><td>{p.description}</td><td>{formatCurrency(p.setup)}</td><td>{formatCurrency(p.monthly)}</td></tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        <div className="print-totals">
-                            <h3>Total Geral</h3>
-                            <p><strong>Total Instalação:</strong> {formatCurrency(totalSetup)}</p>
-                            <p><strong>Total Mensal:</strong> {formatCurrency(totalMonthly)}</p>
-                        </div>
-                    </>
-                )}
-            </div>
-        </>
+                        {/* Tabela de Preços PABX */}
+                        <Card className="bg-slate-900/80 border-slate-800 text-white">
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <CardTitle className="text-green-400">PABX</CardTitle>
+                                <Button
+                                    variant={isEditingPABX ? "secondary" : "outline"}
+                                    size="sm"
+                                    onClick={() => setIsEditingPABX(!isEditingPABX)}
+                                    className="border-slate-600"
+                                >
+                                    {isEditingPABX ? "Salvar" : "Editar"}
+                                </Button>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="overflow-x-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="border-slate-700">
+                                                <TableHead className="text-white bg-green-800">Serviço</TableHead>
+                                                <TableHead className="text-white bg-yellow-600 text-center">Até 10 ramais</TableHead>
+                                                <TableHead className="text-white bg-yellow-600 text-center">De 11 a 20 ramais</TableHead>
+                                                <TableHead className="text-white bg-yellow-600 text-center">De 21 a 30 ramais</TableHead>
+                                                <TableHead className="text-white bg-yellow-600 text-center">De 31 a 50 ramais</TableHead>
+                                                <TableHead className="text-white bg-yellow-600 text-center">De 51 a 100 ramais</TableHead>
+                                                <TableHead className="text-white bg-yellow-600 text-center">De 101 a 500 ramais</TableHead>
+                                                <TableHead className="text-white bg-yellow-600 text-center">De 501 a 1.000 ramais</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-green-900/30">Setup (cobrança única)</TableCell>
+                                                {isEditingPABX ? (
+                                                    <>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.setup['10']} onChange={(e) => setPabxPrices(prev => ({ ...prev, setup: { ...prev.setup, '10': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.setup['20']} onChange={(e) => setPabxPrices(prev => ({ ...prev, setup: { ...prev.setup, '20': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.setup['30']} onChange={(e) => setPabxPrices(prev => ({ ...prev, setup: { ...prev.setup, '30': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.setup['50']} onChange={(e) => setPabxPrices(prev => ({ ...prev, setup: { ...prev.setup, '50': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.setup['100']} onChange={(e) => setPabxPrices(prev => ({ ...prev, setup: { ...prev.setup, '100': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.setup['10'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.setup['20'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.setup['30'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.setup['50'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.setup['100'])}</TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                    </>
+                                                )}
+                                            </TableRow>
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-green-900/30">Valor por ramal (mensal unitário)</TableCell>
+                                                {isEditingPABX ? (
+                                                    <>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.monthly['10']} onChange={(e) => setPabxPrices(prev => ({ ...prev, monthly: { ...prev.monthly, '10': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.monthly['20']} onChange={(e) => setPabxPrices(prev => ({ ...prev, monthly: { ...prev.monthly, '20': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.monthly['30']} onChange={(e) => setPabxPrices(prev => ({ ...prev, monthly: { ...prev.monthly, '30': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.monthly['50']} onChange={(e) => setPabxPrices(prev => ({ ...prev, monthly: { ...prev.monthly, '50': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.monthly['100']} onChange={(e) => setPabxPrices(prev => ({ ...prev, monthly: { ...prev.monthly, '100': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.monthly['500']} onChange={(e) => setPabxPrices(prev => ({ ...prev, monthly: { ...prev.monthly, '500': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.monthly['1000']} onChange={(e) => setPabxPrices(prev => ({ ...prev, monthly: { ...prev.monthly, '1000': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.monthly['10'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.monthly['20'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.monthly['30'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.monthly['50'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.monthly['100'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.monthly['500'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.monthly['1000'])}</TableCell>
+                                                    </>
+                                                )}
+                                            </TableRow>
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-green-900/30">Valor hospedagem (mensal)</TableCell>
+                                                {isEditingPABX ? (
+                                                    <>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.hosting['10']} onChange={(e) => setPabxPrices(prev => ({ ...prev, hosting: { ...prev.hosting, '10': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.hosting['20']} onChange={(e) => setPabxPrices(prev => ({ ...prev, hosting: { ...prev.hosting, '20': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.hosting['30']} onChange={(e) => setPabxPrices(prev => ({ ...prev, hosting: { ...prev.hosting, '30': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.hosting['50']} onChange={(e) => setPabxPrices(prev => ({ ...prev, hosting: { ...prev.hosting, '50': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.hosting['100']} onChange={(e) => setPabxPrices(prev => ({ ...prev, hosting: { ...prev.hosting, '100': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.hosting['10'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.hosting['20'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.hosting['30'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.hosting['50'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.hosting['100'])}</TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                    </>
+                                                )}
+                                            </TableRow>
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-green-900/30">Aluguel Aparelho Grandstream (mensal)</TableCell>
+                                                {isEditingPABX ? (
+                                                    <>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.device['10']} onChange={(e) => setPabxPrices(prev => ({ ...prev, device: { ...prev.device, '10': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.device['20']} onChange={(e) => setPabxPrices(prev => ({ ...prev, device: { ...prev.device, '20': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.device['30']} onChange={(e) => setPabxPrices(prev => ({ ...prev, device: { ...prev.device, '30': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.device['50']} onChange={(e) => setPabxPrices(prev => ({ ...prev, device: { ...prev.device, '50': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell><Input className="bg-slate-800 text-center" value={pabxPrices.device['100']} onChange={(e) => setPabxPrices(prev => ({ ...prev, device: { ...prev.device, '100': parseFloat(e.target.value) || 0 } }))} /></TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.device['10'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.device['20'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.device['30'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.device['50'])}</TableCell>
+                                                        <TableCell className="text-center">{formatCurrency(pabxPrices.device['100'])}</TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                        <TableCell className="text-center text-blue-400">Valor a combinar</TableCell>
+                                                    </>
+                                                )}
+                                            </TableRow>
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </TabsContent>
+            </Tabs>
+        </div>
     );
-}
+};
 
 export default PABXSIPCalculator;

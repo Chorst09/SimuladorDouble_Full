@@ -34,6 +34,8 @@ import {
     Network
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { ClientManagerForm, ClientData, AccountManagerData } from './ClientManagerForm';
+import { ClientManagerInfo } from './ClientManagerInfo';
 
 // Interfaces
 interface PABXTier {
@@ -80,24 +82,32 @@ interface Product {
 
 interface Proposal {
     id: string;
-    clientName: string;
-    accountManager: string;
+    client: ClientData;
+    accountManager: AccountManagerData;
     products: Product[];
     totalSetup: number;
     totalMonthly: number;
-    date: string;
+    createdAt: string;
 }
 
 const MaquinasVirtuaisCalculator: React.FC = () => {
     // Estados de gerenciamento de propostas
     const [currentProposal, setCurrentProposal] = useState<Proposal | null>(null);
-    const [viewMode, setViewMode] = useState<'search' | 'create' | 'edit'>('search');
+    const [viewMode, setViewMode] = useState<'search' | 'client-form' | 'calculator'>('search');
     const [proposals, setProposals] = useState<Proposal[]>([]);
     const [searchTerm, setSearchTerm] = useState<string>('');
 
-    // Estados dos formulários
-    const [clientName, setClientName] = useState('');
-    const [accountManager, setAccountManager] = useState('');
+    // Estados dos dados do cliente e gerente
+    const [clientData, setClientData] = useState<ClientData>({
+        name: '',
+        email: '',
+        phone: ''
+    });
+    const [accountManagerData, setAccountManagerData] = useState<AccountManagerData>({
+        name: '',
+        email: '',
+        phone: ''
+    });
     const [addedProducts, setAddedProducts] = useState<Product[]>([]);
 
     // Estados PABX
@@ -835,19 +845,10 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
     };
 
     const createNewProposal = () => {
-        clearForm();
-        const newProposalId = generateProposalId();
-        const newProposal: Proposal = {
-            id: newProposalId,
-            clientName: '',
-            accountManager: '',
-            products: [],
-            totalSetup: 0,
-            totalMonthly: 0,
-            date: new Date().toLocaleDateString('pt-BR')
-        };
-        setCurrentProposal(newProposal);
-        setViewMode('create');
+        // Limpar dados do formulário
+        setClientData({ name: '', email: '', phone: '' });
+        setAccountManagerData({ name: '', email: '', phone: '' });
+        setViewMode('client-form');
     };
 
     const editProposal = (proposal: Proposal) => {
@@ -894,6 +895,22 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
     );
 
     const handlePrint = () => window.print();
+
+    // Se estiver na tela de formulário do cliente, mostrar o formulário
+    if (viewMode === 'client-form') {
+        return (
+            <ClientManagerForm
+                clientData={clientData}
+                accountManagerData={accountManagerData}
+                onClientDataChange={setClientData}
+                onAccountManagerDataChange={setAccountManagerData}
+                onBack={() => setViewMode('search')}
+                onContinue={() => setViewMode('calculator')}
+                title="Nova Proposta - Máquinas Virtuais"
+                subtitle="Preencha os dados do cliente e gerente de contas para continuar."
+            />
+        );
+    }
 
     return (
         <>
@@ -943,22 +960,27 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
                     </Card>
                 ) : (
                     <>
-                        <Card className="bg-slate-900/80 border-slate-800 text-white mb-6">
-                            <CardHeader>
-                                <CardTitle>{viewMode === 'create' ? 'Criar Nova Proposta' : 'Editar Proposta'}</CardTitle>
-                                <CardDescription>ID da Proposta: {currentProposal?.id}</CardDescription>
-                            </CardHeader>
-                            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <Label htmlFor="client-name">Nome do Cliente</Label>
-                                    <Input id="client-name" value={clientName} onChange={(e) => setClientName(e.target.value)} className="bg-slate-800 border-slate-700" />
+                        <div className="mb-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h1 className="text-3xl font-bold text-white">Calculadora de Máquinas Virtuais</h1>
+                                    <p className="text-slate-400 mt-2">Configure e calcule os custos para VMs na nuvem</p>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="account-manager">Gerente de Contas</Label>
-                                    <Input id="account-manager" value={accountManager} onChange={(e) => setAccountManager(e.target.value)} className="bg-slate-800 border-slate-700" />
-                                </div>
-                            </CardContent>
-                        </Card>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setViewMode('search')}
+                                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                                >
+                                    ← Voltar para Buscar
+                                </Button>
+                            </div>
+                            
+                            {/* Informações do Cliente e Gerente */}
+                            <ClientManagerInfo 
+                                clientData={clientData}
+                                accountManagerData={accountManagerData}
+                            />
+                        </div>
 
                         <div>
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

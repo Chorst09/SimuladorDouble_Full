@@ -10,15 +10,46 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useState, useEffect } from 'react';
+import { TopologyViewer } from '@/components/topology/TopologyViewer';
+import { TopologyConfig } from '../topology/types/topology';
 
 interface DetailedSiteSurveyFormProps {
   surveyType?: string;
+  customerName?: string;
+  address?: string;
   onSubmit: (data: Record<string, string>) => void;
   onBack: () => void;
 }
 
-export function DetailedSiteSurveyForm({ surveyType, onSubmit, onBack }: DetailedSiteSurveyFormProps) {
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+export function DetailedSiteSurveyForm({ surveyType, customerName = '', address = '', onSubmit, onBack }: DetailedSiteSurveyFormProps) {
+  const [equipmentQuantities, setEquipmentQuantities] = useState({
+    towers: 0,
+    antennas: 0,
+    routers: 0,
+    switches: 0,
+    aps: 0,
+    controllers: 0,
+  });
+
+  const [topologyConfig, setTopologyConfig] = useState<TopologyConfig | null>(null);
+
+  useEffect(() => {
+    if (surveyType) {
+      setTopologyConfig({
+        type: surveyType as any,
+        customerName,
+        address,
+        customizations: equipmentQuantities,
+      });
+    }
+  }, [surveyType, customerName, address, equipmentQuantities]);
+
+  const handleQuantityChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    setEquipmentQuantities(prev => ({ ...prev, [name.replace('q-equip-', '')]: parseInt(value, 10) || 0 }));
+  };
+    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const data: Record<string, string> = {};
@@ -28,7 +59,21 @@ export function DetailedSiteSurveyForm({ surveyType, onSubmit, onBack }: Detaile
     onSubmit(data);
   };
   return (
-    <form className="space-y-8" onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Topology Diagram */}
+      {topologyConfig && (
+        <div className="lg:order-2">
+          <TopologyViewer
+            config={topologyConfig}
+            showExportOptions={true}
+            className="sticky top-4"
+          />
+        </div>
+      )}
+
+      {/* Survey Form */}
+      <div className="lg:order-1">
+        <form className="space-y-8" onSubmit={handleSubmit}>
       <Accordion type="multiple" defaultValue={['general', surveyType].filter(Boolean) as string[]}>
         {/* Seção 1: Questionamentos Gerais */}
         <AccordionItem value="general">
@@ -57,6 +102,40 @@ export function DetailedSiteSurveyForm({ surveyType, onSubmit, onBack }: Detaile
             <div className="space-y-2">
               <Label htmlFor="q-security">Segurança: Quais são os requisitos de segurança da rede?</Label>
               <Textarea id="q-security" name="q-security" placeholder="Necessidade de VLANs para convidados, funcionários, etc..." required />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Seção de Equipamentos */}
+        <AccordionItem value="equipment">
+          <AccordionTrigger className="text-xl font-semibold">Equipamentos da Topologia</AccordionTrigger>
+          <AccordionContent className="space-y-6 pt-4">
+            <p className="text-sm text-muted-foreground">Informe a quantidade de cada equipamento para gerar a topologia inicial.</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="q-equip-towers">Torres</Label>
+                                <Input id="q-equip-towers" name="q-equip-towers" type="number" min="0" value={equipmentQuantities.towers} onChange={handleQuantityChange} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="q-equip-antennas">Antenas/Rádios</Label>
+                                <Input id="q-equip-antennas" name="q-equip-antennas" type="number" min="0" value={equipmentQuantities.antennas} onChange={handleQuantityChange} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="q-equip-routers">Roteadores</Label>
+                                <Input id="q-equip-routers" name="q-equip-routers" type="number" min="0" value={equipmentQuantities.routers} onChange={handleQuantityChange} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="q-equip-switches">Switches</Label>
+                                <Input id="q-equip-switches" name="q-equip-switches" type="number" min="0" value={equipmentQuantities.switches} onChange={handleQuantityChange} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="q-equip-aps">Access Points (APs)</Label>
+                                <Input id="q-equip-aps" name="q-equip-aps" type="number" min="0" value={equipmentQuantities.aps} onChange={handleQuantityChange} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="q-equip-controllers">Controladoras</Label>
+                                <Input id="q-equip-controllers" name="q-equip-controllers" type="number" min="0" value={equipmentQuantities.controllers} onChange={handleQuantityChange} />
+              </div>
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -161,12 +240,54 @@ export function DetailedSiteSurveyForm({ surveyType, onSubmit, onBack }: Detaile
             </AccordionContent>
           </AccordionItem>
         )}
+
+        {/* Seção 5: SD-WAN */}
+        {surveyType === 'sdwan' && (
+          <AccordionItem value="sdwan">
+            <AccordionTrigger className="text-xl font-semibold">5. Site Survey para SD-WAN</AccordionTrigger>
+            <AccordionContent className="space-y-6 pt-4">
+              <h3 className="font-semibold text-lg">5.1. Análise de Conectividade WAN</h3>
+              <div className="space-y-2 pl-4">
+                  <Label htmlFor="q-sdwan-connections">Conexões WAN Disponíveis: Quais tipos de conexão WAN estão disponíveis no local?</Label>
+                  <Textarea id="q-sdwan-connections" name="q-sdwan-connections" placeholder="MPLS, Internet banda larga, 4G/5G, fibra dedicada..." required />
+                  <Label htmlFor="q-sdwan-bandwidth">Largura de Banda por Conexão: Qual a capacidade de cada link WAN?</Label>
+                  <Textarea id="q-sdwan-bandwidth" name="q-sdwan-bandwidth" placeholder="Especificar upload/download de cada conexão..." required />
+                  <Label htmlFor="q-sdwan-redundancy">Redundância: Quantas conexões WAN são necessárias para redundância?</Label>
+                  <Textarea id="q-sdwan-redundancy" name="q-sdwan-redundancy" placeholder="Primária, secundária, balanceamento de carga..." required />
+                  <Label htmlFor="q-sdwan-sla">SLA e Qualidade: Quais são os requisitos de SLA para cada aplicação?</Label>
+                  <Textarea id="q-sdwan-sla" name="q-sdwan-sla" placeholder="Latência, jitter, perda de pacotes para VoIP, vídeo..." required />
+              </div>
+              <h3 className="font-semibold text-lg">5.2. Análise de Sites Remotos</h3>
+              <div className="space-y-2 pl-4">
+                  <Label htmlFor="q-sdwan-sites">Sites a Conectar: Quantos e quais sites precisam ser conectados?</Label>
+                  <Textarea id="q-sdwan-sites" name="q-sdwan-sites" placeholder="Matriz, filiais, home office, data centers..." required />
+                  <Label htmlFor="q-sdwan-traffic">Padrões de Tráfego: Qual o fluxo de dados entre os sites?</Label>
+                  <Textarea id="q-sdwan-traffic" name="q-sdwan-traffic" placeholder="Site-to-site, hub-and-spoke, any-to-any..." required />
+                  <Label htmlFor="q-sdwan-applications">Aplicações Críticas: Quais aplicações precisam de priorização?</Label>
+                  <Textarea id="q-sdwan-applications" name="q-sdwan-applications" placeholder="ERP, CRM, videoconferência, backup..." required />
+              </div>
+              <h3 className="font-semibold text-lg">5.3. Infraestrutura Local</h3>
+              <div className="space-y-2 pl-4">
+                  <Label htmlFor="q-sdwan-appliance">Local do Appliance SD-WAN: Onde será instalado o equipamento?</Label>
+                  <Textarea id="q-sdwan-appliance" name="q-sdwan-appliance" placeholder="Rack, sala de TI, ventilação, energia..." required />
+                  <Label htmlFor="q-sdwan-lan">Integração com LAN: Como será a integração com a rede local?</Label>
+                  <Textarea id="q-sdwan-lan" name="q-sdwan-lan" placeholder="VLANs, segmentação, firewall existente..." required />
+                  <Label htmlFor="q-sdwan-management">Gerenciamento: Como será feito o monitoramento e gerenciamento?</Label>
+                  <Textarea id="q-sdwan-management" name="q-sdwan-management" placeholder="Cloud controller, portal web, SNMP..." required />
+                  <Label htmlFor="q-sdwan-security">Segurança: Quais recursos de segurança são necessários?</Label>
+                  <Textarea id="q-sdwan-security" name="q-sdwan-security" placeholder="Firewall integrado, VPN, IPS, filtro de conteúdo..." required />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
       </Accordion>
 
-      <div className="flex justify-end gap-4 pt-8">
-        <Button type="button" variant="outline" size="lg" onClick={onBack}>Voltar</Button>
-        <Button type="submit" size="lg">Salvar Site Survey</Button>
+          <div className="flex justify-end gap-4 pt-8">
+            <Button type="button" variant="outline" size="lg" onClick={onBack}>Voltar</Button>
+            <Button type="submit" size="lg">Salvar Site Survey</Button>
+          </div>
+        </form>
       </div>
-    </form>
+    </div>
   );
 }

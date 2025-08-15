@@ -60,6 +60,7 @@ export function CustomerInfoForm({ onSubmit, onBack }: CustomerInfoFormProps) {
                 <SelectItem value="fiber">Internet via Fibra Óptica</SelectItem>
                 <SelectItem value="radio">Internet via Rádio Enlace</SelectItem>
                 <SelectItem value="wifi">Access Points (Wi-Fi)</SelectItem>
+                <SelectItem value="sdwan">SD-WAN</SelectItem>
               </SelectContent>
             </Select>
           </div>
