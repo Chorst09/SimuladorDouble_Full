@@ -136,6 +136,8 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
 
     // Estados para configurações de preço
     const [markup, setMarkup] = useState<number>(30);
+    const [estimatedNetMargin, setEstimatedNetMargin] = useState<number>(0);
+    const [commissionPercentage, setCommissionPercentage] = useState<number>(3);
     const [setupFee, setSetupFee] = useState<number>(500);
 
     // Estado para controle de abas
@@ -668,6 +670,14 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
         }
     }, [vmContractPeriod]);
 
+    // Efeito para calcular a margem líquida estimada a partir do markup
+    useEffect(() => {
+        if (markup >= 0) {
+            const margin = (markup / (100 + markup)) * 100;
+            setEstimatedNetMargin(margin);
+        }
+    }, [markup]);
+
     // Cálculo do preço final com impostos, markup e desconto por período
     const vmFinalPrice = useMemo(() => {
         const baseCost = calculateVMCost;
@@ -820,6 +830,19 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
 
     const totalSetup = addedProducts.reduce((sum, p) => sum + p.setup, 0);
     const totalMonthly = addedProducts.reduce((sum, p) => sum + p.monthly, 0);
+
+    const markupValue = useMemo(() => {
+        const baseCost = addedProducts.reduce((sum, p) => {
+            // Assumindo que o custo base pode ser derivado do preço mensal sem markup
+            // Esta é uma simplificação. O ideal seria ter o custo base armazenado no produto.
+            return sum + (p.monthly / (1 + markup / 100));
+        }, 0);
+        return totalMonthly - baseCost;
+    }, [addedProducts, totalMonthly, markup]);
+
+    const commissionValue = useMemo(() => {
+        return totalMonthly * (commissionPercentage / 100);
+    }, [totalMonthly, commissionPercentage]);
 
     const generateProposalId = (): string => {
         const now = new Date();
@@ -1253,11 +1276,12 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
                                                     <div className="space-y-2">
                                                         <div className="flex justify-between"><span>Custo Base:</span> <span>{formatCurrency(calculateVMCost)}</span></div>
                                                         <div className="flex justify-between"><span>Impostos ({totalTaxes.toFixed(2)}%):</span> <span>{formatCurrency(calculateVMCost * (totalTaxes / 100))}</span></div>
-                                                        <div className="flex justify-between"><span>Markup ({markup}%):</span> <span>{formatCurrency((calculateVMCost + calculateVMCost * (totalTaxes / 100)) * (markup / 100))}</span></div>
+                                                        <div className="flex justify-between"><span>Lucro (Margem de {estimatedNetMargin.toFixed(2)}%):</span> <span>{formatCurrency((calculateVMCost + calculateVMCost * (totalTaxes / 100)) * (markup / 100))}</span></div>
                                                         {contractDiscount > 0 && (
                                                             <div className="flex justify-between text-orange-400"><span>Desconto Contrato ({contractDiscount}%):</span> <span>-{formatCurrency(((calculateVMCost + calculateVMCost * (totalTaxes / 100)) * (1 + markup / 100)) * (contractDiscount / 100))}</span></div>
                                                         )}
                                                         <div className="flex justify-between"><span>Taxa de Setup:</span> <span>R$ {setupFee.toFixed(2)}</span></div>
+                                                        <div className="flex justify-between text-yellow-400"><span>Comissão ({commissionPercentage}%):</span> <span>{formatCurrency(vmFinalPrice * (commissionPercentage / 100))}</span></div>
                                                         <Separator className="bg-slate-700 my-2" />
                                                         <div className="flex justify-between text-green-400 font-bold text-lg">
                                                             <span>Total Mensal:</span> 
@@ -1373,30 +1397,53 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
                                                 <CardHeader>
                                                     <CardTitle className="text-cyan-400">Markup e Margem Líquida</CardTitle>
                                                 </CardHeader>
-                                                <CardContent className="space-y-4">
-                                                    <div>
-                                                        <Label>% Markup sobre o Custo (%)</Label>
-                                                        <Input defaultValue="40" className="bg-slate-800 border-slate-700" />
+                                                <CardContent>
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                                        <div>
+                                                            <Label htmlFor="markup-cost">Markup (%)</Label>
+                                                            <Input 
+                                                                id="markup-cost"
+                                                                type="number" 
+                                                                value={markup}
+                                                                onChange={(e) => setMarkup(parseFloat(e.target.value) || 0)}
+                                                                className="bg-slate-800 border-slate-700" 
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <Label htmlFor="commission-percentage">Comissão (%)</Label>
+                                                            <Input 
+                                                                id="commission-percentage"
+                                                                type="number" 
+                                                                value={commissionPercentage}
+                                                                onChange={(e) => setCommissionPercentage(parseFloat(e.target.value) || 0)}
+                                                                className="bg-slate-800 border-slate-700" 
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <Label htmlFor="estimated-net-margin">Margem Líquida (%)</Label>
+                                                            <Input 
+                                                                id="estimated-net-margin" 
+                                                                type="number" 
+                                                                value={estimatedNetMargin.toFixed(2)} 
+                                                                readOnly 
+                                                                className="bg-slate-800 border-slate-700 text-white cursor-not-allowed" 
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <Label>% Margem Líquida Estimada (%)</Label>
-                                                        <Input defaultValue="N/A" className="bg-slate-800 border-slate-700" />
+                                                    <Separator className="my-4 bg-slate-700" />
+                                                    <div className="space-y-2 text-sm">
+                                                        <div className="flex justify-between font-semibold text-green-500">
+                                                            <span>Valor do Markup</span>
+                                                            <span>{formatCurrency(markupValue)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between font-semibold text-orange-500">
+                                                            <span>Valor da Comissão</span>
+                                                            <span>{formatCurrency(commissionValue)}</span>
+                                                        </div>
                                                     </div>
                                                 </CardContent>
                                             </Card>
 
-                                            <Card className="bg-slate-900/80 border-slate-800 text-white">
-                                                <CardHeader>
-                                                    <CardTitle className="text-cyan-400">Comissões</CardTitle>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <div className="flex items-center gap-2">
-                                                        <Label>% Percentual sobre a Receita Bruta</Label>
-                                                        <Input defaultValue="3,00" className="bg-slate-800 border-slate-700 w-20" />
-                                                        <span>%</span>
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
                                         </div>
 
                                         {/* Recursos Base (Custos) */}

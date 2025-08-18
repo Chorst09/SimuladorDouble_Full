@@ -95,7 +95,30 @@ const PABXSIPCalculator: React.FC = () => {
     // Estados para edição das tabelas
     const [isEditingPABX, setIsEditingPABX] = useState(false);
     const [isEditingSIP, setIsEditingSIP] = useState(false);
+
+    // Estados para edição da tabela AI
     const [isEditingAI, setIsEditingAI] = useState(false);
+
+    // Estados para Markup e Margem
+    const [markup, setMarkup] = useState<number>(30);
+    const [estimatedNetMargin, setEstimatedNetMargin] = useState<number>(0);
+    const [commissionPercentage, setCommissionPercentage] = useState<number>(3);
+
+    // Salvar preços SIP editados
+    const handleSaveSIP = () => {
+        localStorage.setItem('sipPrices', JSON.stringify(sipPrices));
+        localStorage.setItem('sipConfig', JSON.stringify(sipConfig));
+        setIsEditingSIP(false);
+        alert('Preços SIP salvos com sucesso!');
+    };
+
+    // Função para formatar número como moeda BRL
+    const formatCurrency = (value: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+        }).format(value);
+    };
 
     // Dados de preços do List Price - PABX (editáveis)
     const [pabxPrices, setPabxPrices] = useState({
@@ -139,16 +162,63 @@ const PABXSIPCalculator: React.FC = () => {
 
     // Dados de preços do List Price - SIP (editáveis)
     const [sipPrices, setSipPrices] = useState({
-        'SIP TARIFADO Call Center': { setup: 0, monthly: 200, channels: 2 },
-        'SIP TARIFADO 4 Canais': { setup: 0, monthly: 150, channels: 4 },
-        'SIP TARIFADO 10 Canais': { setup: 0, monthly: 250, channels: 10 },
-        'SIP TARIFADO 30 Canais': { setup: 0, monthly: 350, channels: 30 },
-        'SIP TARIFADO 60 Canais': { setup: 0, monthly: 550, channels: 60 },
-        'SIP ILIMITADO 5 Canais': { setup: 0, monthly: 350, channels: 5 },
-        'SIP ILIMITADO 10 Canais': { setup: 0, monthly: 450, channels: 10 },
-        'SIP ILIMITADO 20 Canais': { setup: 0, monthly: 650, channels: 20 },
-        'SIP ILIMITADO 30 Canais': { setup: 0, monthly: 850, channels: 30 },
-        'SIP ILIMITADO 60 Canais': { setup: 0, monthly: 1600, channels: 60 }
+        'SIP TARIFADO Call Center 2 Canais': { setup: 0, monthly: 200, monthlyWithEquipment: null, channels: 2 },
+        'SIP TARIFADO 2 Canais': { setup: 0, monthly: 150, monthlyWithEquipment: null, channels: 2 },
+        'SIP TARIFADO 4 Canais': { setup: 0, monthly: 250, monthlyWithEquipment: 500, channels: 4 },
+        'SIP TARIFADO 10 Canais': { setup: 0, monthly: 350, monthlyWithEquipment: 500, channels: 10 },
+        'SIP TARIFADO 30 Canais': { setup: 0, monthly: 550, monthlyWithEquipment: 1200, channels: 30 },
+        'SIP TARIFADO 60 Canais': { setup: 0, monthly: 1000, monthlyWithEquipment: null, channels: 60 },
+        'SIP ILIMITADO 5 Canais': { setup: 0, monthly: 350, monthlyWithEquipment: 500, channels: 5 },
+        'SIP ILIMITADO 10 Canais': { setup: 0, monthly: 450, monthlyWithEquipment: 600, channels: 10 },
+        'SIP ILIMITADO 20 Canais': { setup: 0, monthly: 650, monthlyWithEquipment: 800, channels: 20 },
+        'SIP ILIMITADO 30 Canais': { setup: 0, monthly: 850, monthlyWithEquipment: 950, channels: 30 },
+        'SIP ILIMITADO 60 Canais': { setup: 0, monthly: 1600, monthlyWithEquipment: 1700, channels: 60 }
+    });
+
+    // Dados de preços do List Price - Agente IA (editáveis)
+    const [sipConfig, setSipConfig] = useState({
+        additionalChannels: {
+            assinatura: {
+                '5': { max: 3, price: 30 },
+                '10': { max: 5, price: 20 },
+                '20': { max: 3, price: 20 },
+                '30': { max: 20, price: 5 },
+            },
+            franquia: {
+                '4': { max: 10, price: 25 },
+                '10': { max: 20, price: 25 },
+                '30': { max: 30, price: 25 },
+            },
+        },
+        includedMinutes: {
+            '5': 15000,
+            '10': 20000,
+            '20': 25000,
+            '30': 30000,
+            '60': 60000,
+        },
+        includedNumbers: {
+            callCenter: 'Consultar',
+            tarifado: {
+                '2': 'Máximo 3 Números',
+                '4': 'Máximo 4 Números',
+                '10': 'Máximo 5 Números',
+                '30': 'Máximo 5 Números',
+            },
+            ilimitado: {
+                '5': 'Máximo 10 Números',
+                '10': 'Máximo 15 Números',
+                '20': 'Máximo 20 Números',
+                '30': 'Máximo 30 Números',
+                '60': 'Máximo 30 Números',
+            }
+        },
+        additionalNumberPrice: 10,
+        tariffs: {
+            localFixo: { callCenter: 0.015, tarifado: 0.02 },
+            dddFixo: { callCenter: 0.05, tarifado: 0.06 },
+            brasilMovel: { callCenter: 0.09, default: 0.10 },
+        },
     });
 
     // Dados de preços do List Price - Agente IA (editáveis)
@@ -196,8 +266,16 @@ const PABXSIPCalculator: React.FC = () => {
     // Calcular SIP
     const calculateSIP = () => {
         const planPrice = sipPrices[sipPlan as keyof typeof sipPrices];
+        
+        if (!planPrice) {
+            setSipResult({ setup: 0, monthly: 0 });
+            return;
+        }
+        
         const setup = sipIncludeSetup ? 50 : 0; // Taxa padrão de setup SIP
-        const monthly = planPrice.monthly;
+        const monthly = sipWithEquipment && planPrice.monthlyWithEquipment !== null 
+            ? planPrice.monthlyWithEquipment 
+            : planPrice.monthly;
 
         const result: SIPResult = {
             setup,
@@ -237,10 +315,6 @@ const PABXSIPCalculator: React.FC = () => {
     const totalSetup = proposalItems.reduce((sum, item) => sum + item.setup, 0);
     const totalMonthly = proposalItems.reduce((sum, item) => sum + item.monthly, 0);
 
-    // Formatação de moeda
-    const formatCurrency = (value: number) =>
-        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
     // Função para salvar proposta
     const saveProposal = () => {
         if (proposalItems.length === 0) {
@@ -270,6 +344,11 @@ const PABXSIPCalculator: React.FC = () => {
         existingProposals.unshift(newProposal);
         localStorage.setItem('pabx-sip-proposals', JSON.stringify(existingProposals));
 
+        // Salvar preços PABX e SIP no localStorage
+        localStorage.setItem('pabxPrices', JSON.stringify(pabxPrices));
+        localStorage.setItem('sipPrices', JSON.stringify(sipPrices));
+        localStorage.setItem('sipConfig', JSON.stringify(sipConfig));
+
         alert(`Proposta ${newProposal.id} salva com sucesso!`);
 
         // Resetar formulário
@@ -279,11 +358,39 @@ const PABXSIPCalculator: React.FC = () => {
         setCurrentView('search');
     };
 
-    // Carregar propostas do localStorage
+    // Carregar propostas e preços do localStorage
     useEffect(() => {
-        const saved = JSON.parse(localStorage.getItem('pabx-sip-proposals') || '[]');
-        setSavedProposals(saved);
+        const savedProposals = JSON.parse(localStorage.getItem('pabx-sip-proposals') || '[]');
+        setSavedProposals(savedProposals);
+
+        const savedPabxPrices = localStorage.getItem('pabxPrices');
+        if (savedPabxPrices) {
+            setPabxPrices(JSON.parse(savedPabxPrices));
+        }
+
+        const savedAiAgentPrices = localStorage.getItem('aiAgentPrices');
+        if (savedAiAgentPrices) {
+            setAiAgentPrices(JSON.parse(savedAiAgentPrices));
+        }
+
+        const savedSipPrices = localStorage.getItem('sipPrices');
+        if (savedSipPrices) {
+            setSipPrices(JSON.parse(savedSipPrices));
+        }
+
+        const savedSipConfig = localStorage.getItem('sipConfig');
+        if (savedSipConfig) {
+            setSipConfig(JSON.parse(savedSipConfig));
+        }
     }, []);
+
+    // Efeito para calcular a margem líquida estimada a partir do markup
+    useEffect(() => {
+        if (markup >= 0) {
+            const margin = (markup / (100 + markup)) * 100;
+            setEstimatedNetMargin(margin);
+        }
+    }, [markup]);
 
     // Calcular automaticamente quando os valores mudarem
     useEffect(() => {
@@ -614,6 +721,7 @@ const PABXSIPCalculator: React.FC = () => {
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="bg-slate-800 border-slate-700">
+                                                <SelectItem value="none">Sem Agente IA</SelectItem>
                                                 <SelectItem value="20K">20K</SelectItem>
                                                 <SelectItem value="40K">40K</SelectItem>
                                                 <SelectItem value="60K">60K</SelectItem>
@@ -691,12 +799,17 @@ const PABXSIPCalculator: React.FC = () => {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-800 border-slate-700">
-                                            <SelectItem value="SIP ILIMITADO 10 Canais">SIP ILIMITADO 10 Canais</SelectItem>
-                                            <SelectItem value="SIP ILIMITADO 20 Canais">SIP ILIMITADO 20 Canais</SelectItem>
-                                            <SelectItem value="SIP ILIMITADO 30 Canais">SIP ILIMITADO 30 Canais</SelectItem>
+                                            <SelectItem value="SIP TARIFADO Call Center 2 Canais">SIP TARIFADO Call Center 2 Canais</SelectItem>
+                                            <SelectItem value="SIP TARIFADO 2 Canais">SIP TARIFADO 2 Canais</SelectItem>
                                             <SelectItem value="SIP TARIFADO 4 Canais">SIP TARIFADO 4 Canais</SelectItem>
                                             <SelectItem value="SIP TARIFADO 10 Canais">SIP TARIFADO 10 Canais</SelectItem>
                                             <SelectItem value="SIP TARIFADO 30 Canais">SIP TARIFADO 30 Canais</SelectItem>
+                                            <SelectItem value="SIP TARIFADO 60 Canais">SIP TARIFADO 60 Canais</SelectItem>
+                                            <SelectItem value="SIP ILIMITADO 5 Canais">SIP ILIMITADO 5 Canais</SelectItem>
+                                            <SelectItem value="SIP ILIMITADO 10 Canais">SIP ILIMITADO 10 Canais</SelectItem>
+                                            <SelectItem value="SIP ILIMITADO 20 Canais">SIP ILIMITADO 20 Canais</SelectItem>
+                                            <SelectItem value="SIP ILIMITADO 30 Canais">SIP ILIMITADO 30 Canais</SelectItem>
+                                            <SelectItem value="SIP ILIMITADO 60 Canais">SIP ILIMITADO 60 Canais</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -745,7 +858,7 @@ const PABXSIPCalculator: React.FC = () => {
                                                 <span>{formatCurrency(sipResult.setup)}</span>
                                             </div>
                                             <Separator className="my-2 bg-slate-600" />
-                                            <div className="flex justify-between font-semibold text-green-400">
+                                            <div className="flex justify-between font-bold text-lg text-green-400">
                                                 <span>Total Mensal:</span>
                                                 <span>{formatCurrency(sipResult.monthly)}</span>
                                             </div>
@@ -804,11 +917,8 @@ const PABXSIPCalculator: React.FC = () => {
                                     </TableBody>
                                 </Table>
 
-                                <div className="flex gap-2 mt-4">
-                                    <Button
-                                        className="bg-green-600 hover:bg-green-700"
-                                        onClick={saveProposal}
-                                    >
+                                <div className="flex justify-end gap-4 mt-6">
+                                    <Button onClick={saveProposal} className="bg-green-600 hover:bg-green-700">
                                         Salvar Proposta
                                     </Button>
                                     <Button className="bg-blue-600 hover:bg-blue-700">
@@ -873,19 +983,20 @@ const PABXSIPCalculator: React.FC = () => {
                                                                 [plan]: { ...prev[plan], price: newPrice }
                                                             }));
                                                         }}
-                                                        className="bg-slate-800 border-slate-600 text-center text-lg font-bold"
                                                     />
                                                 ) : (
-                                                    <p className="text-lg font-bold text-white">{formatCurrency(data.price)}</p>
+                                                    <p className="text-2xl font-bold">{formatCurrency(data.price)}</p>
                                                 )}
+                                                <p className="text-xs text-slate-500">por mês</p>
+                                            </div>
+
+                                            <div className="text-xs text-slate-400 mt-4 space-y-1">
+                                                <p>* 1 crédito por mensagem</p>
+                                                <p>** 10 créditos por minuto</p>
+                                                <p>*** 20 créditos por minuto (voz premium)</p>
                                             </div>
                                         </div>
                                     ))}
-                                </div>
-                                <div className="mt-4 text-xs text-slate-500 space-y-1">
-                                    <p>* 1 crédito por mensagem</p>
-                                    <p>** 2 créditos por minuto (voz padrão)</p>
-                                    <p>*** 20 créditos por minuto (voz premium)</p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -897,7 +1008,7 @@ const PABXSIPCalculator: React.FC = () => {
                                 <Button
                                     variant={isEditingSIP ? "secondary" : "outline"}
                                     size="sm"
-                                    onClick={() => setIsEditingSIP(!isEditingSIP)}
+                                    onClick={isEditingSIP ? handleSaveSIP : () => setIsEditingSIP(true)}
                                     className="border-slate-600"
                                 >
                                     {isEditingSIP ? "Salvar" : "Editar"}
@@ -907,92 +1018,183 @@ const PABXSIPCalculator: React.FC = () => {
                                 <div className="overflow-x-auto">
                                     <Table>
                                         <TableHeader>
-                                            <TableRow className="border-slate-700">
+                                                        <TableRow className="border-slate-700">
                                                 <TableHead rowSpan={3} className="text-white bg-blue-900 text-center align-middle">SIP TRUNK</TableHead>
-                                                <TableHead colSpan={2} className="text-white bg-blue-800 text-center">SIP TARIFADO</TableHead>
-                                                <TableHead colSpan={3} className="text-white bg-blue-700 text-center">SIP TARIFADO</TableHead>
-                                                <TableHead colSpan={5} className="text-white bg-blue-600 text-center">SIP ILIMITADO</TableHead>
+                                                <TableHead colSpan={6} className="text-white bg-blue-800 text-center">SIP TARIFADO</TableHead>
+                                                <TableHead colSpan={5} className="text-white bg-blue-700 text-center">SIP ILIMITADO</TableHead>
                                             </TableRow>
                                             <TableRow className="border-slate-700">
                                                 <TableHead className="text-white bg-blue-800 text-center">Call Center</TableHead>
-                                                <TableHead className="text-white bg-blue-800 text-center">Até 4 Canais</TableHead>
-                                                <TableHead className="text-white bg-blue-700 text-center">De 5 a 10 Canais</TableHead>
-                                                <TableHead className="text-white bg-blue-700 text-center">De 11 a 20 Canais</TableHead>
-                                                <TableHead className="text-white bg-blue-700 text-center">Acima de 20 Canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center">Até 4 Canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center">De 5 a 10 Canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center">De 11 a 20 Canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center">De 21 a 30 Canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center">Acima de 30 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center">2</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center">4</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center">10</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center">30</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center">60</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center">5</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center">10</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center">20</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center">30</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center">60</TableHead>
                                             </TableRow>
                                             <TableRow className="border-slate-700">
-                                                <TableHead className="text-white bg-blue-800 text-center text-xs">2 canais</TableHead>
-                                                <TableHead className="text-white bg-blue-800 text-center text-xs">4 canais</TableHead>
-                                                <TableHead className="text-white bg-blue-700 text-center text-xs">10 canais</TableHead>
-                                                <TableHead className="text-white bg-blue-700 text-center text-xs">30 canais</TableHead>
-                                                <TableHead className="text-white bg-blue-700 text-center text-xs">60 canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center text-xs">5 canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center text-xs">10 canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center text-xs">20 canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center text-xs">30 canais</TableHead>
-                                                <TableHead className="text-white bg-blue-600 text-center text-xs">60 canais</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center text-xs">2 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center text-xs">2 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center text-xs">4 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center text-xs">10 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center text-xs">30 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-800 text-center text-xs">60 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center text-xs">5 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center text-xs">10 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center text-xs">20 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center text-xs">30 Canais</TableHead>
+                                                <TableHead className="text-white bg-blue-700 text-center text-xs">60 Canais</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
+                                            {/* Canais Adicionais - Assinatura */}
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Canais Adicionais (Assinatura Mensal)</TableCell>
+                                                <TableCell className="text-center bg-blue-800/20">Não Aplicável</TableCell>
+                                                <TableCell className="text-center" colSpan={5}>Não Aplicável</TableCell>
+                                                {Object.entries(sipConfig.additionalChannels.assinatura).map(([plan, data]) => (
+                                                    <TableCell key={`assinatura-${plan}`} className="text-center bg-blue-600/20">
+                                                        {isEditingSIP ? (
+                                                            <div className="space-y-1">
+                                                                <Input type="number" value={data.max} onChange={(e) => setSipConfig(prev => ({ ...prev, additionalChannels: { ...prev.additionalChannels, assinatura: { ...prev.additionalChannels.assinatura, [plan]: { ...prev.additionalChannels.assinatura[plan], max: Number(e.target.value) } } } }))} className="bg-slate-800 text-center text-xs" placeholder="Canais" />
+                                                                <Input type="number" value={data.price} onChange={(e) => setSipConfig(prev => ({ ...prev, additionalChannels: { ...prev.additionalChannels, assinatura: { ...prev.additionalChannels.assinatura, [plan]: { ...prev.additionalChannels.assinatura[plan], price: Number(e.target.value) } } } }))} className="bg-slate-800 text-center text-xs" placeholder="Preço" />
+                                                            </div>
+                                                        ) : (
+                                                            `Até ${data.max} canais<br/>${formatCurrency(data.price)} por canal adicional`
+                                                        )}
+                                                    </TableCell>
+                                                ))}
+                                                <TableCell className="text-center bg-blue-600/20">Sem possibilidade</TableCell>
+                                            </TableRow>
+
+                                            {/* Canais Adicionais - Franquia */}
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Canais Adicionais (Franquia Mensal)</TableCell>
+                                                <TableCell className="text-center bg-blue-800/20">Não Aplicável</TableCell>
+                                                {Object.entries(sipConfig.additionalChannels.franquia).map(([plan, data]) => (
+                                                    <TableCell key={`franquia-${plan}`} className="text-center">
+                                                        {isEditingSIP ? (
+                                                            <div className="space-y-1">
+                                                                <Input type="number" value={data.max} onChange={(e) => setSipConfig(prev => ({ ...prev, additionalChannels: { ...prev.additionalChannels, franquia: { ...prev.additionalChannels.franquia, [plan]: { ...prev.additionalChannels.franquia[plan], max: Number(e.target.value) } } } }))} className="bg-slate-800 text-center text-xs" placeholder="Canais" />
+                                                                <Input type="number" value={data.price} onChange={(e) => setSipConfig(prev => ({ ...prev, additionalChannels: { ...prev.additionalChannels, franquia: { ...prev.additionalChannels.franquia, [plan]: { ...prev.additionalChannels.franquia[plan], price: Number(e.target.value) } } } }))} className="bg-slate-800 text-center text-xs" placeholder="Preço" />
+                                                            </div>
+                                                        ) : (
+                                                            `Até ${data.max} canais<br/>${formatCurrency(data.price)} por canal adicional/mês`
+                                                        )}
+                                                    </TableCell>
+                                                ))}
+                                                <TableCell className="text-center" colSpan={4}>Sem possibilidade</TableCell>
+                                            </TableRow>
                                             <TableRow className="border-slate-800">
                                                 <TableCell className="font-semibold bg-blue-900/30">Franquia/Assinatura Mensal (Sem Equipamentos)</TableCell>
-                                                {isEditingSIP ? (
-                                                    <>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 200" /></TableCell>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 150" /></TableCell>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 250" /></TableCell>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 350" /></TableCell>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 550" /></TableCell>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 350" /></TableCell>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 450" /></TableCell>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 650" /></TableCell>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 850" /></TableCell>
-                                                        <TableCell><Input className="bg-slate-800 text-center" defaultValue="R$ 1.600" /></TableCell>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <TableCell className="text-center">R$ 200</TableCell>
-                                                        <TableCell className="text-center">R$ 150</TableCell>
-                                                        <TableCell className="text-center">R$ 250</TableCell>
-                                                        <TableCell className="text-center">R$ 350</TableCell>
-                                                        <TableCell className="text-center">R$ 550</TableCell>
-                                                        <TableCell className="text-center">R$ 350</TableCell>
-                                                        <TableCell className="text-center">R$ 450</TableCell>
-                                                        <TableCell className="text-center">R$ 650</TableCell>
-                                                        <TableCell className="text-center">R$ 850</TableCell>
-                                                        <TableCell className="text-center">R$ 1.600</TableCell>
-                                                    </>
-                                                )}
+                                                {Object.keys(sipPrices).map(planKey => (
+                                                    <TableCell key={planKey} className="text-center">
+                                                        {isEditingSIP ? (
+                                                            <Input
+                                                                className="bg-slate-800 text-center"
+                                                                value={sipPrices[planKey as keyof typeof sipPrices].monthly}
+                                                                onChange={(e) => {
+                                                                    const newSipPrices = { ...sipPrices };
+                                                                    newSipPrices[planKey as keyof typeof sipPrices].monthly = Number(e.target.value);
+                                                                    setSipPrices(newSipPrices);
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <>{formatCurrency(sipPrices[planKey as keyof typeof sipPrices].monthly)}<br/>({planKey.includes('TARIFADO') ? 'Franquia' : 'Assinatura'})</>
+                                                        )}
+                                                    </TableCell>
+                                                ))}
                                             </TableRow>
                                             <TableRow className="border-slate-800">
                                                 <TableCell className="font-semibold bg-blue-900/30">Franquia/Assinatura Mensal (Com Equipamentos)</TableCell>
-                                                <TableCell className="text-center" colSpan={10}>
+                                                {Object.keys(sipPrices).map(planKey => {
+                                                    const plan = sipPrices[planKey as keyof typeof sipPrices];
+                                                    const value = plan.monthlyWithEquipment;
+
+                                                    if (isEditingSIP) {
+                                                        return (
+                                                            <TableCell key={planKey} className="text-center">
+                                                                <Input
+                                                                    className="bg-slate-800 text-center"
+                                                                    value={value === null ? 'Não Aplicável' : value}
+                                                                    disabled={value === null}
+                                                                    onChange={(e) => {
+                                                                        const newSipPrices = { ...sipPrices };
+                                                                        newSipPrices[planKey as keyof typeof sipPrices].monthlyWithEquipment = Number(e.target.value);
+                                                                        setSipPrices(newSipPrices);
+                                                                    }}
+                                                                />
+                                                            </TableCell>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <TableCell key={planKey} className="text-center">
+                                                            {value === null ? 'Não Aplicável' : <>{formatCurrency(value)}<br/>({planKey.includes('TARIFADO') ? 'Franquia' : 'Assinatura'})</>}
+                                                        </TableCell>
+                                                    );
+                                                })}
+                                            </TableRow>
+                                            {/* Minutos Inclusos */}
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Minutos Mensais Inclusos para Brasil Móvel</TableCell>
+                                                <TableCell className="text-center bg-blue-800/20">Não Aplicável</TableCell>
+                                                <TableCell className="text-center" colSpan={4}>Não aplicável</TableCell>
+                                                {Object.entries(sipConfig.includedMinutes).map(([plan, minutes]) => (
+                                                    <TableCell key={`minutes-${plan}`} className="text-center">
+                                                        {isEditingSIP ? (
+                                                            <Input type="number" value={minutes} onChange={(e) => setSipConfig(prev => ({ ...prev, includedMinutes: { ...prev.includedMinutes, [plan]: Number(e.target.value) } }))} className="bg-slate-800 text-center" />
+                                                        ) : (
+                                                            `${minutes.toLocaleString()}<br/>Minutos`
+                                                        )}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                            {/* Números Incluídos */}
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Números Incluídos (Novos ou Portados)</TableCell>
+                                                <TableCell className="text-center">{isEditingSIP ? <Input value={sipConfig.includedNumbers.callCenter} onChange={(e) => setSipConfig(prev => ({...prev, includedNumbers: {...prev.includedNumbers, callCenter: e.target.value}}))} className="bg-slate-800 text-center" /> : sipConfig.includedNumbers.callCenter}</TableCell>
+                                                {Object.entries(sipConfig.includedNumbers.tarifado).map(([plan, text]) => (
+                                                    <TableCell key={`tarifado-num-${plan}`} className="text-center">{isEditingSIP ? <Input value={text} onChange={(e) => setSipConfig(prev => ({...prev, includedNumbers: {...prev.includedNumbers, tarifado: {...prev.includedNumbers.tarifado, [plan]: e.target.value}}}))} className="bg-slate-800 text-center" /> : text}</TableCell>
+                                                ))}
+                                                <TableCell className="text-center">Sem possibilidade</TableCell>{/* Coluna 60 canais tarifado */}
+                                                {Object.entries(sipConfig.includedNumbers.ilimitado).map(([plan, text]) => (
+                                                    <TableCell key={`ilimitado-num-${plan}`} className="text-center">{isEditingSIP ? <Input value={text} onChange={(e) => setSipConfig(prev => ({...prev, includedNumbers: {...prev.includedNumbers, ilimitado: {...prev.includedNumbers.ilimitado, [plan]: e.target.value}}}))} className="bg-slate-800 text-center" /> : text}</TableCell>
+                                                ))}
+                                            </TableRow>
+                                            {/* Numeração Adicional */}
+                                            <TableRow className="border-slate-800">
+                                                <TableCell className="font-semibold bg-blue-900/30">Numeração Adicional (Mensalidade)</TableCell>
+                                                <TableCell className="text-center">Consultar</TableCell>
+                                                <TableCell colSpan={10} className="text-center">
                                                     {isEditingSIP ? (
-                                                        <Input className="bg-slate-800 text-center" defaultValue="R$ 500 (Franquia)" />
+                                                        <Input type="number" value={sipConfig.additionalNumberPrice} onChange={(e) => setSipConfig(prev => ({ ...prev, additionalNumberPrice: Number(e.target.value) }))} className="bg-slate-800 text-center w-40 mx-auto" />
                                                     ) : (
-                                                        "R$ 500 (Franquia)"
+                                                        `${formatCurrency(sipConfig.additionalNumberPrice)} por Número`
                                                     )}
                                                 </TableCell>
                                             </TableRow>
+                                            {/* Tarifas */}
                                             <TableRow className="border-slate-800">
                                                 <TableCell className="font-semibold bg-blue-900/30">Tarifa Local Fixo (por minuto)</TableCell>
-                                                <TableCell className="text-center" colSpan={5}>R$ 0,02 por minuto</TableCell>
-                                                <TableCell className="text-center" colSpan={5}>Ilimitado</TableCell>
+                                                <TableCell className="text-center">{isEditingSIP ? <Input type="number" value={sipConfig.tariffs.localFixo.callCenter} onChange={(e) => setSipConfig(prev => ({...prev, tariffs: {...prev.tariffs, localFixo: {...prev.tariffs.localFixo, callCenter: Number(e.target.value)}}}))} className="bg-slate-800 text-center" /> : `${formatCurrency(sipConfig.tariffs.localFixo.callCenter)}<br/>por minuto`}</TableCell>
+                                                <TableCell colSpan={5} className="text-center">{isEditingSIP ? <Input type="number" value={sipConfig.tariffs.localFixo.tarifado} onChange={(e) => setSipConfig(prev => ({...prev, tariffs: {...prev.tariffs, localFixo: {...prev.tariffs.localFixo, tarifado: Number(e.target.value)}}}))} className="bg-slate-800 text-center" /> : `${formatCurrency(sipConfig.tariffs.localFixo.tarifado)} por minuto`}</TableCell>
+                                                <TableCell colSpan={5} className="text-center">Ilimitado</TableCell>
                                             </TableRow>
                                             <TableRow className="border-slate-800">
                                                 <TableCell className="font-semibold bg-blue-900/30">Tarifa DDD Fixo (por minuto)</TableCell>
-                                                <TableCell className="text-center" colSpan={5}>R$ 0,06 por minuto</TableCell>
-                                                <TableCell className="text-center" colSpan={5}>Ilimitado</TableCell>
+                                                <TableCell className="text-center">{isEditingSIP ? <Input type="number" value={sipConfig.tariffs.dddFixo.callCenter} onChange={(e) => setSipConfig(prev => ({...prev, tariffs: {...prev.tariffs, dddFixo: {...prev.tariffs.dddFixo, callCenter: Number(e.target.value)}}}))} className="bg-slate-800 text-center" /> : `${formatCurrency(sipConfig.tariffs.dddFixo.callCenter)}<br/>por minuto`}</TableCell>
+                                                <TableCell colSpan={5} className="text-center">{isEditingSIP ? <Input type="number" value={sipConfig.tariffs.dddFixo.tarifado} onChange={(e) => setSipConfig(prev => ({...prev, tariffs: {...prev.tariffs, dddFixo: {...prev.tariffs.dddFixo, tarifado: Number(e.target.value)}}}))} className="bg-slate-800 text-center" /> : `${formatCurrency(sipConfig.tariffs.dddFixo.tarifado)} por minuto`}</TableCell>
+                                                <TableCell colSpan={5} className="text-center">Ilimitado</TableCell>
                                             </TableRow>
                                             <TableRow className="border-slate-800">
                                                 <TableCell className="font-semibold bg-blue-900/30">Tarifa Brasil Móvel (por minuto)</TableCell>
-                                                <TableCell className="text-center" colSpan={5}>R$ 0,10 por minuto</TableCell>
-                                                <TableCell className="text-center" colSpan={5}>R$ 0,10 por minuto</TableCell>
+                                                <TableCell className="text-center">{isEditingSIP ? <Input type="number" value={sipConfig.tariffs.brasilMovel.callCenter} onChange={(e) => setSipConfig(prev => ({...prev, tariffs: {...prev.tariffs, brasilMovel: {...prev.tariffs.brasilMovel, callCenter: Number(e.target.value)}}}))} className="bg-slate-800 text-center" /> : `${formatCurrency(sipConfig.tariffs.brasilMovel.callCenter)}<br/>por minuto`}</TableCell>
+                                                <TableCell colSpan={10} className="text-center">{isEditingSIP ? <Input type="number" value={sipConfig.tariffs.brasilMovel.default} onChange={(e) => setSipConfig(prev => ({...prev, tariffs: {...prev.tariffs, brasilMovel: {...prev.tariffs.brasilMovel, default: Number(e.target.value)}}}))} className="bg-slate-800 text-center" /> : `${formatCurrency(sipConfig.tariffs.brasilMovel.default)} por minuto`}</TableCell>
                                             </TableRow>
                                         </TableBody>
                                     </Table>
