@@ -90,26 +90,52 @@ const FiberLinkCalculator: React.FC = () => {
     const [includeInstallation, setIncludeInstallation] = useState<boolean>(true);
     const [projectValue, setProjectValue] = useState<number>(0);
 
-    // Dados das tabelas baseados nas imagens
-    const fiberPlans: FiberPlan[] = [
-        { speed: 25, price12: 720.00, price24: 450.00, price36: 400.00, installationCost: 998.00, description: "25 Mbps" },
-        { speed: 30, price12: 740.08, price24: 500.00, price36: 450.00, installationCost: 998.00, description: "30 Mbps" },
-        { speed: 40, price12: 915.01, price24: 550.00, price36: 500.00, installationCost: 998.00, description: "40 Mbps" },
-        { speed: 50, price12: 1103.39, price24: 600.00, price36: 550.00, installationCost: 998.00, description: "50 Mbps" },
-        { speed: 60, price12: 1547.44, price24: 700.00, price36: 600.00, installationCost: 998.00, description: "60 Mbps" },
-        { speed: 80, price12: 1825.98, price24: 895.00, price36: 790.00, installationCost: 998.00, description: "80 Mbps" },
-        { speed: 100, price12: 2017.05, price24: 1100.00, price36: 900.00, installationCost: 998.00, description: "100 Mbps" },
-        { speed: 150, price12: 2543.18, price24: 1400.00, price36: 1150.00, installationCost: 998.00, description: "150 Mbps" },
-        { speed: 200, price12: 3215.98, price24: 1650.00, price36: 1299.00, installationCost: 998.00, description: "200 Mbps" },
-        { speed: 300, price12: 7522.00, price24: 2200.00, price36: 1600.00, installationCost: 998.00, description: "300 Mbps" },
-        { speed: 400, price12: 9469.00, price24: 2900.00, price36: 2300.00, installationCost: 1996.00, description: "400 Mbps" },
-        { speed: 500, price12: 11174.00, price24: 3400.00, price36: 2650.00, installationCost: 1996.00, description: "500 Mbps" },
-        { speed: 600, price12: 0, price24: 3750.00, price36: 3150.00, installationCost: 1996.00, description: "600 Mbps" },
-        { speed: 700, price12: 0, price24: 4150.00, price36: 3499.00, installationCost: 1996.00, description: "700 Mbps" },
-        { speed: 800, price12: 0, price24: 4490.00, price36: 3890.00, installationCost: 1996.00, description: "800 Mbps" },
-        { speed: 900, price12: 0, price24: 4750.00, price36: 4250.00, installationCost: 1996.00, description: "900 Mbps" },
-        { speed: 1000, price12: 17754.00, price24: 5000.00, price36: 4500.00, installationCost: 1996.00, description: "1000 Mbps (1 Gbps)" }
-    ];
+    const [fiberPlans, setFiberPlans] = useState<FiberPlan[]>([]);
+
+    useEffect(() => {
+        const initialFiberPlans: FiberPlan[] = [
+            { speed: 25, price12: 720.00, price24: 474.00, price36: 421.00, installationCost: 998.00, description: "25 Mbps" },
+            { speed: 30, price12: 740.08, price24: 527.00, price36: 474.00, installationCost: 998.00, description: "30 Mbps" },
+            { speed: 40, price12: 915.01, price24: 579.00, price36: 527.00, installationCost: 998.00, description: "40 Mbps" },
+            { speed: 50, price12: 1103.39, price24: 632.00, price36: 579.00, installationCost: 998.00, description: "50 Mbps" },
+            { speed: 60, price12: 1547.44, price24: 737.00, price36: 632.00, installationCost: 998.00, description: "60 Mbps" },
+            { speed: 80, price12: 1825.98, price24: 943.00, price36: 832.00, installationCost: 998.00, description: "80 Mbps" },
+            { speed: 100, price12: 2017.05, price24: 1158.00, price36: 948.00, installationCost: 998.00, description: "100 Mbps" },
+            { speed: 150, price12: 2543.18, price24: 1474.00, price36: 1211.00, installationCost: 998.00, description: "150 Mbps" },
+            { speed: 200, price12: 3215.98, price24: 1737.00, price36: 1368.00, installationCost: 998.00, description: "200 Mbps" },
+            { speed: 300, price12: 7522.00, price24: 2316.00, price36: 1685.00, installationCost: 998.00, description: "300 Mbps" },
+            { speed: 400, price12: 9469.00, price24: 3053.00, price36: 2421.00, installationCost: 1996.00, description: "400 Mbps" },
+            { speed: 500, price12: 11174.00, price24: 3579.00, price36: 2790.00, installationCost: 1996.00, description: "500 Mbps" },
+            { speed: 600, price12: 0, price24: 3948.00, price36: 3316.00, installationCost: 1996.00, description: "600 Mbps" },
+            { speed: 700, price12: 0, price24: 4368.00, price36: 3684.00, installationCost: 1996.00, description: "700 Mbps" },
+            { speed: 800, price12: 0, price24: 4727.00, price36: 4095.00, installationCost: 1996.00, description: "800 Mbps" },
+            { speed: 900, price12: 0, price24: 5000.00, price36: 4474.00, installationCost: 1996.00, description: "900 Mbps" },
+            { speed: 1000, price12: 17754.00, price24: 5264.00, price36: 4737.00, installationCost: 1996.00, description: "1000 Mbps (1 Gbps)" }
+        ];
+
+        const savedPlans = localStorage.getItem('fiberLinkPrices');
+        if (savedPlans) {
+            setFiberPlans(JSON.parse(savedPlans));
+        } else {
+            setFiberPlans(initialFiberPlans);
+        }
+    }, []);
+
+    const handlePriceChange = (speed: number, term: 'price12' | 'price24' | 'price36', value: string) => {
+        const newPlans = fiberPlans.map(plan => {
+            if (plan.speed === speed) {
+                const sanitizedValue = value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                return { ...plan, [term]: parseFloat(sanitizedValue) || 0 };
+            }
+            return plan;
+        });
+        setFiberPlans(newPlans);
+    };
+
+    const handleSavePrices = () => {
+        localStorage.setItem('fiberLinkPrices', JSON.stringify(fiberPlans));
+        alert('Preços salvos com sucesso!');
+    };
 
     const installationTiers: InstallationTier[] = [
         { minValue: 0, maxValue: 4500, cost: 998.00 },
@@ -228,40 +254,45 @@ const FiberLinkCalculator: React.FC = () => {
 
     const createNewProposal = () => {
         clearForm();
+        setCurrentProposal(null);
         setViewMode('client-form');
-        setCurrentProposal(newProposal);
-        setViewMode('create');
     };
 
     const editProposal = (proposal: Proposal) => {
         setCurrentProposal(proposal);
-        // Carregar dados da proposta (será implementado quando atualizar a interface Proposal)
+        setClientData(proposal.client);
+        setAccountManagerData(proposal.accountManager);
         setAddedProducts(proposal.products);
         setViewMode('calculator');
     };
 
     const saveProposal = () => {
-        if (viewMode === 'calculator') {
-            const proposalToSave: Proposal = {
-                id: `FIBER-${Date.now()}`,
-                client: clientData,
-                accountManager: accountManagerData,
-                products: addedProducts,
-                totalSetup,
-                totalMonthly,
-                createdAt: new Date().toISOString()
-            };
-
-            if (viewMode === 'create') {
-                setProposals(prev => [...prev, proposalToSave]);
-            } else {
-                setProposals(prev => prev.map(p => p.id === proposalToSave.id ? proposalToSave : p));
-            }
-
-            setViewMode('search');
-            setCurrentProposal(null);
-            clearForm();
+        if (addedProducts.length === 0) {
+            alert('Adicione pelo menos um produto à proposta.');
+            return;
         }
+
+        const proposalToSave: Proposal = {
+            id: currentProposal?.id || generateProposalId(),
+            client: clientData,
+            accountManager: accountManagerData,
+            products: addedProducts,
+            totalSetup,
+            totalMonthly,
+            createdAt: currentProposal?.createdAt || new Date().toISOString()
+        };
+
+        if (currentProposal) {
+            // Editando proposta existente
+            setProposals(prev => prev.map(p => p.id === proposalToSave.id ? proposalToSave : p));
+        } else {
+            // Nova proposta
+            setProposals(prev => [...prev, proposalToSave]);
+        }
+
+        setViewMode('search');
+        setCurrentProposal(null);
+        clearForm();
     };
 
     const cancelAction = () => {
@@ -271,8 +302,8 @@ const FiberLinkCalculator: React.FC = () => {
     };
 
     const filteredProposals = (proposals || []).filter(p =>
-        p.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.id.toLowerCase().includes(searchTerm.toLowerCase())
+        (p.client?.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (p.id?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     );
 
     const handlePrint = () => window.print();
@@ -330,7 +361,7 @@ const FiberLinkCalculator: React.FC = () => {
                                         {filteredProposals.map(p => (
                                             <TableRow key={p.id} className="border-slate-800">
                                                 <TableCell>{p.id}</TableCell>
-                                                <TableCell>{p.client.name}</TableCell>
+                                                <TableCell>{p.client?.name || 'N/D'}</TableCell>
                                                 <TableCell>{new Date(p.createdAt).toLocaleDateString('pt-BR')}</TableCell>
                                                 <TableCell>{formatCurrency(p.totalMonthly)}</TableCell>
                                                 <TableCell>
@@ -372,7 +403,7 @@ const FiberLinkCalculator: React.FC = () => {
                         <Tabs defaultValue="calculator" className="w-full">
                             <TabsList className="grid w-full grid-cols-2 bg-slate-800">
                                 <TabsTrigger value="calculator">Calculadora</TabsTrigger>
-                                <TabsTrigger value="list-price">List Price</TabsTrigger>
+                                <TabsTrigger value="list-price">Tabela de Preços</TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="calculator">
@@ -452,7 +483,7 @@ const FiberLinkCalculator: React.FC = () => {
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Prazo:</span>
-                                                            <span>{contractTerm} meses (Payback: {result.contractInfo?.paybackMonths} meses)</span>
+                                                            <span>{contractTerm} meses (Retorno: {result.contractInfo?.paybackMonths} meses)</span>
                                                         </div>
                                                         <div className="flex justify-between">
                                                             <span>Taxa de Instalação:</span>
@@ -563,19 +594,37 @@ const FiberLinkCalculator: React.FC = () => {
                                                         <TableBody>
                                                             {fiberPlans.map((plan) => (
                                                                 <TableRow key={plan.speed} className="border-slate-800">
-                                                                    <TableCell className="font-semibold border border-slate-600 text-center p-2">
+                                                                    <TableCell className="font-semibold border border-slate-600 text-center p-2 align-middle">
                                                                         {plan.speed}
                                                                     </TableCell>
-                                                                    <TableCell className="border border-slate-600 text-center p-2">
-                                                                        {plan.price12 > 0 ? formatCurrency(plan.price12) : '-'}
+                                                                    <TableCell className="border border-slate-600 text-center p-1">
+                                                                        <Input
+                                                                            type="text"
+                                                                            value={plan.price12 > 0 ? plan.price12.toFixed(2).replace('.', ',') : ''}
+                                                                            onChange={(e) => handlePriceChange(plan.speed, 'price12', e.target.value)}
+                                                                            className="bg-slate-700 text-center w-28 mx-auto"
+                                                                            placeholder="N/A"
+                                                                        />
                                                                     </TableCell>
-                                                                    <TableCell className="border border-slate-600 text-center p-2">
-                                                                        {plan.price24 > 0 ? formatCurrency(plan.price24) : '-'}
+                                                                    <TableCell className="border border-slate-600 text-center p-1">
+                                                                        <Input
+                                                                            type="text"
+                                                                            value={plan.price24 > 0 ? plan.price24.toFixed(2).replace('.', ',') : ''}
+                                                                            onChange={(e) => handlePriceChange(plan.speed, 'price24', e.target.value)}
+                                                                            className="bg-slate-700 text-center w-28 mx-auto"
+                                                                            placeholder="N/A"
+                                                                        />
                                                                     </TableCell>
-                                                                    <TableCell className="border border-slate-600 text-center p-2">
-                                                                        {plan.price36 > 0 ? formatCurrency(plan.price36) : '-'}
+                                                                    <TableCell className="border border-slate-600 text-center p-1">
+                                                                        <Input
+                                                                            type="text"
+                                                                            value={plan.price36 > 0 ? plan.price36.toFixed(2).replace('.', ',') : ''}
+                                                                            onChange={(e) => handlePriceChange(plan.speed, 'price36', e.target.value)}
+                                                                            className="bg-slate-700 text-center w-28 mx-auto"
+                                                                            placeholder="N/A"
+                                                                        />
                                                                     </TableCell>
-                                                                    <TableCell className="border border-slate-600 text-center p-2">
+                                                                    <TableCell className="border border-slate-600 text-center p-2 align-middle">
                                                                         {formatCurrency(plan.installationCost)}
                                                                     </TableCell>
                                                                 </TableRow>
@@ -583,9 +632,15 @@ const FiberLinkCalculator: React.FC = () => {
                                                         </TableBody>
                                                     </Table>
                                                 </div>
+                                                <div className="flex justify-end mt-6">
+                                                    <Button onClick={handleSavePrices} className="bg-blue-600 hover:bg-blue-700">
+                                                        <Save className="h-4 w-4 mr-2" />
+                                                        Salvar Preços
+                                                    </Button>
+                                                </div>
                                                 <div className="mt-4 text-sm text-blue-400">
-                                                    <p>*** Produto Double - Adicionar 50% ao valor da mensalidade de RÁDIO.</p>
-                                                    <p>*** Se refundo de Parceiro Indicador - Adicionar 20% ao preço.</p>
+                                                    <p>*** Produto Duplo - Adicionar 50% ao valor da mensalidade de RÁDIO.</p>
+                                                    <p>*** Se reembolso de Parceiro Indicador - Adicionar 20% ao preço.</p>
                                                 </div>
                                             </div>
 
@@ -626,11 +681,11 @@ const FiberLinkCalculator: React.FC = () => {
                                             <div>
                                                 <h3 className="text-lg font-semibold mb-4">Informações de Contrato</h3>
                                                 <div className="space-y-1 text-sm">
-                                                    <p>Contratos de 12 meses - Payback 08 meses</p>
-                                                    <p>Contratos de 24 meses - Payback 10 meses</p>
-                                                    <p>Contratos de 36 meses - Payback 11 meses</p>
-                                                    <p>Contratos de 48 meses - Payback 13 meses</p>
-                                                    <p>Contratos de 60 meses - Payback 14 meses</p>
+                                                    <p>Contratos de 12 meses - Retorno 08 meses</p>
+                                                    <p>Contratos de 24 meses - Retorno 10 meses</p>
+                                                    <p>Contratos de 36 meses - Retorno 11 meses</p>
+                                                    <p>Contratos de 48 meses - Retorno 13 meses</p>
+                                                    <p>Contratos de 60 meses - Retorno 14 meses</p>
                                                 </div>
                                             </div>
                                         </div>

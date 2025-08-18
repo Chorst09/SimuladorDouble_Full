@@ -33,7 +33,7 @@ import RadioInternetCalculator from '@/components/calculators/RadioInternetCalcu
 
 // Importe dados e tipos se ainda usados aqui
 import type { Partner, RO, Training, NavItem, NavSubItem } from '@/lib/types';
-import { initialPartners, initialRos, initialTrainings, salesData, quoteStatusData } from '@/lib/data';
+import { initialTrainings } from '@/lib/data';
 
 // Importe o hook useTheme
 import { useTheme } from 'next-themes'; // <--- ADICIONADO ESTE IMPORT
@@ -49,9 +49,6 @@ export default function App() { // Ou Home
 
     const [activeTab, setActiveTab] = useState('dashboard'); // Estado da aba ativa
     // Você pode remover ou adaptar estes estados se os componentes de view gerenciarem seus próprios dados carregados do Firestore
-    const [partners, setPartners] = useState<Partner[]>(initialPartners); // Exemplo: Manter se necessário para dados locais/testes
-    // Removed quotes, proposals, rfps, priceRecords, editais, and bidDocs state variables
-    const [ros, setRos] = useState<RO[]>(initialRos);
     const [trainings, setTrainings] = useState<Training[]>(initialTrainings);
 
     // Estado para controlar se as seções colapsáveis estão abertas (adapte)
@@ -74,20 +71,17 @@ export default function App() { // Ou Home
     // Definição dos Itens de Navegação (adapte do seu código original)
     const navItems: NavItem[] = [
         { id: 'dashboard', label: 'Dashboard', icon: <BarChart size={20} /> },
-        // Removed quotes (orçamentos) and proposals (propostas) navigation items
         {
             id: 'pricing',
             label: 'Precificação',
             icon: <Calculator size={20} />,
             subItems: [
-                // Removed calculator-ti-vls (Venda/Locação/Serviços) as requested
                 { id: 'calculator-pabx-sip', label: 'PABX/SIP', icon: <Phone size={16} /> },
                 { id: 'calculator-maquinas-virtuais', label: 'Máquinas Virtuais', icon: <Server size={16} /> },
                 { id: 'calculator-fiber-link', label: 'Link via Fibra', icon: <Wifi size={16} /> },
                 { id: 'calculator-radio-internet', label: 'Internet via Rádio', icon: <Radio size={16} /> },
             ]
         },
-        // Removed Licitações/Editais (Bids/Tenders), Atas de Registro de Preços (Price Records), and RFP/RFI navigation items
         { id: 'it-assessment', label: 'Assessment de TI', icon: <CheckSquare size={20} /> },
         { id: 'poc', label: 'Provas de Conceito POC', icon: <BarChart3 size={20} /> },
         { 
@@ -118,7 +112,7 @@ export default function App() { // Ou Home
         // Remova a dependência de useAuth() dentro deles, se houver.
 
         switch (activeTab) {
-            case 'dashboard': return <DashboardView salesData={salesData} quoteStatusData={quoteStatusData} partners={partners} ros={ros} />;
+            case 'dashboard': return <DashboardView />;
             // Removed distributors, suppliers, ro-management, training-management, quotes, and proposals cases
             // Removed calculator-ti-vls case (Venda/Locação/Serviços) as requested
             case 'calculator-pabx-sip': return <PABXSIPCalculator />;
@@ -129,7 +123,7 @@ export default function App() { // Ou Home
             // Removed bids-analyzer, bids-analysis, bids-docs, rfp, price-records cases
             case 'it-assessment': return <iframe src="/it-assessment.html" className="w-full h-screen border-0" title="Assessment de TI" />;
             case 'poc': return <iframe src="/poc-management.html" className="w-full h-screen border-0" title="Provas de Conceito POC" />;
-            default: return <DashboardView salesData={salesData} quoteStatusData={quoteStatusData} partners={partners} ros={ros} />;
+            default: return <DashboardView />;
         }
     };
 
