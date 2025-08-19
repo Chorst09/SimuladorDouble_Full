@@ -1,30 +1,111 @@
 // src/hooks/use-auth.tsx
 "use client";
 
-import React, { createContext, useContext, ReactNode, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User as FirebaseUser, onAuthStateChanged, signOut, getAuth } from 'firebase/auth';
+import { doc, getDoc, getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { app } from '@/lib/firebase';
 
-// Importações e inicialização do Firebase Auth removidas
-// import { getAuth, ... } from "firebase/auth";
-// const app = getFirebaseApp();
-// const auth = app ? getAuth(app) : null;
+// Define o tipo para o objeto de usuário, incluindo a role
+interface User {
+  uid: string;
+  email: string | null;
+  role: 'admin' | 'user';
+}
 
-// Importações relacionadas ao Firestore podem ser mantidas se ainda usadas para outros propósitos
-import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
-import { getFirebaseApp } from "@/lib/firebase";
+// Define o tipo para o contexto de autenticação
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  logout: () => Promise<void>;
+}
 
-// Definição do tipo AuthContextType e contexto removidos ou modificados
-// interface AuthContextType { ... }
-// const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// AuthProvider e hook useAuth removidos ou modificados
-// export const AuthProvider = ({ children }: { children: ReactNode }) => { ... };
-// export const useAuth = () => { ... };
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-// Conteúdo do arquivo após a remoção do código de autenticação:
-// Dependendo de como o restante do aplicativo usa este hook, pode ser necessário
-// fornecer um hook dummy ou remover as chamadas para useAuth em outros lugares.
-// Por enquanto, o arquivo estará quase vazio ou conterá apenas imports não relacionados à auth.
+  useEffect(() => {
+    if (!app) {
+      setLoading(false);
+      return;
+    }
 
-// Removendo completamente o conteúdo relacionado à autenticação e deixando o arquivo vazio ou com código não-auth.
+    const auth = getAuth(app);
+    const db = getFirestore(app);
 
-// Deixando o arquivo vazio para desativar completamente a funcionalidade de autenticação.
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      try {
+        if (firebaseUser) {
+          // Usuário logado, busca o perfil no Firestore
+          // Busca por email já que o documento pode ter sido criado com addDoc
+          const usersCollection = collection(db, 'users');
+          const q = query(usersCollection, where('email', '==', firebaseUser.email));
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            const userData = querySnapshot.docs[0].data();
+            console.log('User data found:', userData); // Debug log
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              role: userData.role || 'user', // Padrão para 'user' se não houver role
+            });
+          } else {
+            // Documento do usuário não encontrado, criar um padrão
+            console.log('User document not found, creating default user'); // Debug log
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              role: 'user',
+            });
+          }
+        } else {
+          // Usuário deslogado
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados do usuário:', error);
+        // Em caso de erro, ainda define o usuário básico se autenticado
+        if (firebaseUser) {
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            role: 'user',
+          });
+        } else {
+          setUser(null);
+        }
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    // Limpa a inscrição ao desmontar
+    return () => unsubscribe();
+  }, []);
+
+  const logout = async () => {
+    if (!app) {
+      return;
+    }
+    const auth = getAuth(app);
+    await signOut(auth);
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, loading, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// Hook customizado para usar o contexto de autenticação
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

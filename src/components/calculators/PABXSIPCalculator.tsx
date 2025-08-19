@@ -10,8 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Phone, PhoneForwarded } from 'lucide-react';
+import { Phone, PhoneForwarded, Edit, Plus, Save, Download, Trash2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { ClientManagerForm, ClientData, AccountManagerData } from './ClientManagerForm';
+import { ClientManagerInfo } from './ClientManagerInfo';
 
 // Interfaces
 interface PABXResult {
@@ -28,21 +30,10 @@ interface SIPResult {
 }
 
 interface ProposalItem {
+    id: string;
     description: string;
     setup: number;
     monthly: number;
-}
-
-interface ClientData {
-    name: string;
-    email: string;
-    phone: string;
-}
-
-interface AccountManagerData {
-    name: string;
-    email: string;
-    phone: string;
 }
 
 interface Proposal {
@@ -60,6 +51,7 @@ const PABXSIPCalculator: React.FC = () => {
     const [currentView, setCurrentView] = useState<'search' | 'client-form' | 'calculator'>('search');
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [savedProposals, setSavedProposals] = useState<Proposal[]>([]);
+    const [currentProposal, setCurrentProposal] = useState<Proposal | null>(null);
 
     // Estados dos dados do cliente e gerente
     const [clientData, setClientData] = useState<ClientData>({
@@ -103,22 +95,6 @@ const PABXSIPCalculator: React.FC = () => {
     const [markup, setMarkup] = useState<number>(30);
     const [estimatedNetMargin, setEstimatedNetMargin] = useState<number>(0);
     const [commissionPercentage, setCommissionPercentage] = useState<number>(3);
-
-    // Salvar preços SIP editados
-    const handleSaveSIP = () => {
-        localStorage.setItem('sipPrices', JSON.stringify(sipPrices));
-        localStorage.setItem('sipConfig', JSON.stringify(sipConfig));
-        setIsEditingSIP(false);
-        alert('Preços SIP salvos com sucesso!');
-    };
-
-    // Função para formatar número como moeda BRL
-    const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('pt-BR', {
-            style: 'currency',
-            currency: 'BRL',
-        }).format(value);
-    };
 
     // Dados de preços do List Price - PABX (editáveis)
     const [pabxPrices, setPabxPrices] = useState({
@@ -175,7 +151,7 @@ const PABXSIPCalculator: React.FC = () => {
         'SIP ILIMITADO 60 Canais': { setup: 0, monthly: 1600, monthlyWithEquipment: 1700, channels: 60 }
     });
 
-    // Dados de preços do List Price - Agente IA (editáveis)
+    // Dados de preços do List Price - SIP Config (editáveis)
     const [sipConfig, setSipConfig] = useState({
         additionalChannels: {
             assinatura: {
@@ -231,6 +207,10 @@ const PABXSIPCalculator: React.FC = () => {
         '200K': { price: 5400, credits: 200000, messages: 100000, minutes: 20000, premium: 10000 }
     });
 
+    // Funções Auxiliares
+    const formatCurrency = (value: number) => `R$ ${value.toFixed(2).replace('.', ',')}`;
+    const generateUniqueId = () => `item-${Date.now()}`;
+
     // Função para determinar a faixa de preço baseada no número de ramais
     const getPriceRange = (extensions: number): string => {
         if (extensions <= 10) return '10';
@@ -285,11 +265,20 @@ const PABXSIPCalculator: React.FC = () => {
         setSipResult(result);
     };
 
+    // Salvar preços SIP editados
+    const handleSaveSIP = () => {
+        localStorage.setItem('sipPrices', JSON.stringify(sipPrices));
+        localStorage.setItem('sipConfig', JSON.stringify(sipConfig));
+        setIsEditingSIP(false);
+        alert('Preços SIP salvos com sucesso!');
+    };
+
     // Adicionar PABX à proposta
     const addPABXToProposal = () => {
         if (!pabxResult) return;
 
         const newItem: ProposalItem = {
+            id: generateUniqueId(),
             description: `PABX ${pabxExtensions} ramais`,
             setup: pabxResult.setup,
             monthly: pabxResult.totalMonthly
@@ -303,6 +292,7 @@ const PABXSIPCalculator: React.FC = () => {
         if (!sipResult) return;
 
         const newItem: ProposalItem = {
+            id: generateUniqueId(),
             description: sipPlan,
             setup: sipResult.setup,
             monthly: sipResult.monthly
@@ -311,9 +301,34 @@ const PABXSIPCalculator: React.FC = () => {
         setProposalItems(prev => [...prev, newItem]);
     };
 
+    const handleRemoveItem = (id: string) => {
+        setProposalItems(prev => prev.filter(item => item.id !== id));
+    };
+
     // Calcular totais da proposta
     const totalSetup = proposalItems.reduce((sum, item) => sum + item.setup, 0);
     const totalMonthly = proposalItems.reduce((sum, item) => sum + item.monthly, 0);
+
+    const clearForm = () => {
+        setClientData({ name: '', email: '', phone: '' });
+        setAccountManagerData({ name: '', email: '', phone: '' });
+        setProposalItems([]);
+        setCurrentProposal(null);
+        // Resetar outros estados da calculadora se necessário
+    };
+
+    const createNewProposal = () => {
+        clearForm();
+        setCurrentView('client-form');
+    };
+
+    const editProposal = (proposal: Proposal) => {
+        setCurrentProposal(proposal);
+        setClientData(proposal.client);
+        setAccountManagerData(proposal.accountManager);
+        setProposalItems(proposal.items);
+        setCurrentView('calculator');
+    };
 
     // Função para salvar proposta
     const saveProposal = () => {
@@ -322,41 +337,44 @@ const PABXSIPCalculator: React.FC = () => {
             return;
         }
 
-        if (!clientData.name || !clientData.email || !accountManagerData.name) {
-            alert('Preencha os dados obrigatórios do cliente e gerente de contas.');
-            return;
-        }
-
-        const newProposal: Proposal = {
-            id: `PROP-${Date.now()}`,
+        const proposalToSave: Proposal = {
+            id: currentProposal?.id || `PROP-${Date.now()}`,
             client: clientData,
             accountManager: accountManagerData,
             items: proposalItems,
             totalSetup,
             totalMonthly,
-            createdAt: new Date().toISOString()
+            createdAt: currentProposal?.createdAt || new Date().toISOString()
         };
 
-        setSavedProposals(prev => [newProposal, ...prev]);
+        const updatedProposals = currentProposal
+            ? savedProposals.map(p => p.id === proposalToSave.id ? proposalToSave : p)
+            : [...savedProposals, proposalToSave];
 
-        // Salvar no localStorage
-        const existingProposals = JSON.parse(localStorage.getItem('pabx-sip-proposals') || '[]');
-        existingProposals.unshift(newProposal);
-        localStorage.setItem('pabx-sip-proposals', JSON.stringify(existingProposals));
+        setSavedProposals(updatedProposals);
 
         // Salvar preços PABX e SIP no localStorage
         localStorage.setItem('pabxPrices', JSON.stringify(pabxPrices));
         localStorage.setItem('sipPrices', JSON.stringify(sipPrices));
         localStorage.setItem('sipConfig', JSON.stringify(sipConfig));
 
-        alert(`Proposta ${newProposal.id} salva com sucesso!`);
-
-        // Resetar formulário
-        setProposalItems([]);
-        setClientData({ name: '', email: '', phone: '' });
-        setAccountManagerData({ name: '', email: '', phone: '' });
+        alert(`Proposta ${proposalToSave.id} salva com sucesso!`);
+        
+        clearForm();
         setCurrentView('search');
     };
+
+    const cancelAction = () => {
+        clearForm();
+        setCurrentView('search');
+    };
+
+    // Salvar propostas no localStorage sempre que forem alteradas
+    useEffect(() => {
+        if (savedProposals.length > 0) {
+            localStorage.setItem('pabx-sip-proposals', JSON.stringify(savedProposals));
+        }
+    }, [savedProposals]);
 
     // Carregar propostas e preços do localStorage
     useEffect(() => {
@@ -401,123 +419,26 @@ const PABXSIPCalculator: React.FC = () => {
         calculateSIP();
     }, [sipPlan, sipIncludeSetup, sipAdditionalChannels, sipWithEquipment]);
 
+    const filteredProposals = savedProposals.filter(p =>
+        p.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const handlePrint = () => window.print();
+
     // Se estiver na tela de formulário do cliente, mostrar o formulário
     if (currentView === 'client-form') {
         return (
-            <div className="container mx-auto p-6 bg-slate-950 text-white min-h-screen">
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-white mb-2">Nova Proposta</h1>
-                    <p className="text-slate-400">Preencha os dados do cliente e gerente de contas.</p>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Dados do Cliente */}
-                    <Card className="bg-slate-900/80 border-slate-800 text-white">
-                        <CardHeader>
-                            <CardTitle>Dados do Cliente</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <Label htmlFor="client-name">Nome do Cliente *</Label>
-                                <Input
-                                    id="client-name"
-                                    value={clientData.name}
-                                    onChange={(e) => setClientData(prev => ({ ...prev, name: e.target.value }))}
-                                    className="bg-slate-800 border-slate-700 text-white"
-                                    placeholder="Nome completo do cliente"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="client-email">Email do Cliente *</Label>
-                                <Input
-                                    id="client-email"
-                                    type="email"
-                                    value={clientData.email}
-                                    onChange={(e) => setClientData(prev => ({ ...prev, email: e.target.value }))}
-                                    className="bg-slate-800 border-slate-700 text-white"
-                                    placeholder="email@cliente.com"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="client-phone">Telefone do Cliente</Label>
-                                <Input
-                                    id="client-phone"
-                                    value={clientData.phone}
-                                    onChange={(e) => setClientData(prev => ({ ...prev, phone: e.target.value }))}
-                                    className="bg-slate-800 border-slate-700 text-white"
-                                    placeholder="(11) 99999-9999"
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Dados do Gerente de Contas */}
-                    <Card className="bg-slate-900/80 border-slate-800 text-white">
-                        <CardHeader>
-                            <CardTitle>Dados do Gerente de Contas</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div>
-                                <Label htmlFor="manager-name">Nome do Gerente *</Label>
-                                <Input
-                                    id="manager-name"
-                                    value={accountManagerData.name}
-                                    onChange={(e) => setAccountManagerData(prev => ({ ...prev, name: e.target.value }))}
-                                    className="bg-slate-800 border-slate-700 text-white"
-                                    placeholder="Nome completo do gerente"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="manager-email">Email do Gerente *</Label>
-                                <Input
-                                    id="manager-email"
-                                    type="email"
-                                    value={accountManagerData.email}
-                                    onChange={(e) => setAccountManagerData(prev => ({ ...prev, email: e.target.value }))}
-                                    className="bg-slate-800 border-slate-700 text-white"
-                                    placeholder="gerente@empresa.com"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <Label htmlFor="manager-phone">Telefone do Gerente</Label>
-                                <Input
-                                    id="manager-phone"
-                                    value={accountManagerData.phone}
-                                    onChange={(e) => setAccountManagerData(prev => ({ ...prev, phone: e.target.value }))}
-                                    className="bg-slate-800 border-slate-700 text-white"
-                                    placeholder="(11) 99999-9999"
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <div className="flex justify-between mt-8">
-                    <Button
-                        variant="outline"
-                        onClick={() => setCurrentView('search')}
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                    >
-                        ← Voltar
-                    </Button>
-                    <Button
-                        onClick={() => {
-                            if (!clientData.name || !clientData.email || !accountManagerData.name || !accountManagerData.email) {
-                                alert('Preencha os campos obrigatórios marcados com *');
-                                return;
-                            }
-                            setCurrentView('calculator');
-                        }}
-                        className="bg-blue-600 hover:bg-blue-700"
-                    >
-                        Continuar para Calculadora →
-                    </Button>
-                </div>
-            </div>
+            <ClientManagerForm
+                clientData={clientData}
+                accountManagerData={accountManagerData}
+                onClientDataChange={setClientData}
+                onAccountManagerDataChange={setAccountManagerData}
+                onBack={cancelAction}
+                onContinue={() => setCurrentView('calculator')}
+                title="Nova Proposta - PABX/SIP"
+                subtitle="Preencha os dados do cliente e gerente de contas para continuar."
+            />
         );
     }
 
@@ -543,10 +464,10 @@ const PABXSIPCalculator: React.FC = () => {
                                 />
                             </div>
                             <Button
-                                onClick={() => setCurrentView('client-form')}
+                                onClick={createNewProposal}
                                 className="bg-blue-600 hover:bg-blue-700 px-6"
                             >
-                                + Nova Proposta
+                                <Plus className="mr-2 h-4 w-4"/> Nova Proposta
                             </Button>
                         </div>
                     </CardContent>
@@ -566,14 +487,14 @@ const PABXSIPCalculator: React.FC = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {savedProposals.length === 0 ? (
+                                {filteredProposals.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={5} className="text-center py-8 text-slate-400">
                                             Nenhuma proposta encontrada. Clique em "Nova Proposta" para começar.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    savedProposals.map((proposal) => (
+                                    filteredProposals.map((proposal) => (
                                         <TableRow key={proposal.id} className="border-slate-800 hover:bg-slate-800/50">
                                             <TableCell className="text-slate-300">{proposal.id}</TableCell>
                                             <TableCell className="text-slate-300">{proposal.client.name}</TableCell>
@@ -584,15 +505,9 @@ const PABXSIPCalculator: React.FC = () => {
                                                     variant="outline"
                                                     size="sm"
                                                     className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                                                    onClick={() => {
-                                                        // Carregar dados da proposta para edição
-                                                        setClientData(proposal.client);
-                                                        setAccountManagerData(proposal.accountManager);
-                                                        setProposalItems(proposal.items);
-                                                        setCurrentView('calculator');
-                                                    }}
+                                                    onClick={() => editProposal(proposal)}
                                                 >
-                                                    Editar
+                                                    <Edit className="h-4 w-4" />
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
@@ -620,29 +535,12 @@ const PABXSIPCalculator: React.FC = () => {
                         onClick={() => setCurrentView('search')}
                         className="border-slate-600 text-slate-300 hover:bg-slate-700"
                     >
-                        ← Voltar para Buscar
+                        ← Voltar para Busca
                     </Button>
                 </div>
 
                 {/* Informações do Cliente e Gerente */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <Card className="bg-slate-900/50 border-slate-800">
-                        <CardContent className="p-4">
-                            <h3 className="font-semibold text-white mb-2">Cliente</h3>
-                            <p className="text-slate-300 text-sm">{clientData.name}</p>
-                            <p className="text-slate-400 text-xs">{clientData.email}</p>
-                            {clientData.phone && <p className="text-slate-400 text-xs">{clientData.phone}</p>}
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-slate-900/50 border-slate-800">
-                        <CardContent className="p-4">
-                            <h3 className="font-semibold text-white mb-2">Gerente de Contas</h3>
-                            <p className="text-slate-300 text-sm">{accountManagerData.name}</p>
-                            <p className="text-slate-400 text-xs">{accountManagerData.email}</p>
-                            {accountManagerData.phone && <p className="text-slate-400 text-xs">{accountManagerData.phone}</p>}
-                        </CardContent>
-                    </Card>
-                </div>
+                <ClientManagerInfo clientData={clientData} accountManagerData={accountManagerData} />
             </div>
 
             <Tabs defaultValue="calculator" className="w-full">
@@ -898,10 +796,20 @@ const PABXSIPCalculator: React.FC = () => {
                                     </TableHeader>
                                     <TableBody>
                                         {proposalItems.map((item, index) => (
-                                            <TableRow key={index} className="border-slate-800">
+                                            <TableRow key={item.id} className="border-slate-800">
                                                 <TableCell>{item.description}</TableCell>
                                                 <TableCell className="text-right">{formatCurrency(item.setup)}</TableCell>
                                                 <TableCell className="text-right">{formatCurrency(item.monthly)}</TableCell>
+                                                <TableCell>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                                                        onClick={() => handleRemoveItem(item.id)}
+                                                    >
+                                                        Excluir
+                                                    </Button>
+                                                </TableCell>
                                             </TableRow>
                                         ))}
                                         <TableRow className="border-slate-700 font-semibold">
@@ -924,7 +832,7 @@ const PABXSIPCalculator: React.FC = () => {
                                     <Button className="bg-blue-600 hover:bg-blue-700">
                                         Gerar PDF
                                     </Button>
-                                    <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700">
+                                    <Button variant="outline" className="border-slate-600 text-slate-300 hover:bg-slate-700" onClick={cancelAction}>
                                         Cancelar
                                     </Button>
                                 </div>
@@ -1018,7 +926,7 @@ const PABXSIPCalculator: React.FC = () => {
                                 <div className="overflow-x-auto">
                                     <Table>
                                         <TableHeader>
-                                                        <TableRow className="border-slate-700">
+                                            <TableRow className="border-slate-700">
                                                 <TableHead rowSpan={3} className="text-white bg-blue-900 text-center align-middle">SIP TRUNK</TableHead>
                                                 <TableHead colSpan={6} className="text-white bg-blue-800 text-center">SIP TARIFADO</TableHead>
                                                 <TableHead colSpan={5} className="text-white bg-blue-700 text-center">SIP ILIMITADO</TableHead>

@@ -1,95 +1,98 @@
 // src/app/page.tsx
 'use client';
 
-import { useEffect, useMemo, useState } from 'react'; // Mantenha todos os hooks necessários
-// Importação de useAuth removida
-// import { useAuth } from "@/hooks/use-auth";
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useAuth } from "@/hooks/use-auth";
+import { useAdmin } from "@/hooks/use-admin";
 import { useRouter } from 'next/navigation';
 import {
-    Loader2, LogOut, User, Briefcase, BarChart, Search,
-    Users, DollarSign, Archive, Calculator, PlusCircle,
-    Trash2, Edit, Building, ShoppingCart, ExternalLink, FileDown, Paperclip,
-    X, Server, Headset, Printer, ChevronDown, Tag, Info, Settings, FileText,
-    BarChart2, TrendingUp, Percent, ShoppingBag, Repeat, Wrench, Zap,
-    CheckCircle, Award, Gavel, Moon, Sun, Brain, Phone, Wifi, Radio, CheckSquare, BarChart3, ClipboardList // Ícones para o botão de tema
-} from 'lucide-react'; // Importe todos os ícones usados diretamente aqui
+    Loader2, LogOut, User, Briefcase, BarChart, Calculator,
+    Server, Phone, Wifi, Radio, CheckSquare, BarChart3, ClipboardList,
+    ChevronDown, Moon, Sun, Users, Shield, MapPin
+} from 'lucide-react';
 
 // Importe seus componentes de UI
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
-// Importe seus componentes de View
-import DashboardView from '@/components/dashboard/DashboardView';
-// Removed imports for PartnerView, QuotesView, ProposalsView, RoManagementView, TrainingManagementView
-import CalculatorFrame from '@/components/calculators/CalculatorFrame';
-// Removed imports for BidsAnalysis, BidsDocumentationView, RFPView, PriceRecordView, EditalAnalysisView
-import VMProposals from '@/components/proposals/VMProposals';
-import PABXSIPCalculator from '@/components/calculators/PABXSIPCalculator';
-import MaquinasVirtuaisCalculator from '@/components/calculators/MaquinasVirtuaisCalculator';
-import FiberLinkCalculator from '@/components/calculators/FiberLinkCalculator';
-import RadioInternetCalculator from '@/components/calculators/RadioInternetCalculator';
+// Lazy load dos componentes pesados
+const DashboardView = lazy(() => import('@/components/dashboard/DashboardView'));
+const PABXSIPCalculator = lazy(() => import('@/components/calculators/PABXSIPCalculator'));
+const MaquinasVirtuaisCalculator = lazy(() => import('@/components/calculators/MaquinasVirtuaisCalculator'));
+const FiberLinkCalculator = lazy(() => import('@/components/calculators/FiberLinkCalculator'));
+const RadioInternetCalculator = lazy(() => import('@/components/calculators/RadioInternetCalculator'));
+const UserManagement = lazy(() => import('@/components/admin/UserManagement'));
+const AdminSetup = lazy(() => import('@/components/admin/AdminSetup'));
 
 // Importe dados e tipos se ainda usados aqui
-import type { Partner, RO, Training, NavItem, NavSubItem } from '@/lib/types';
-import { initialTrainings } from '@/lib/data';
+import type { NavItem } from '@/lib/types';
 
 // Importe o hook useTheme
-import { useTheme } from 'next-themes'; // <--- ADICIONADO ESTE IMPORT
+import { useTheme } from 'next-themes';
 
 
-export default function App() { // Ou Home
-    // Chamada e uso de useAuth removidos
-    // const { user, loading, logout } = useAuth();
+export default function App() {
+    const { user, loading, logout } = useAuth();
+    const { hasAnyAdmin, loading: adminLoading } = useAdmin();
     const router = useRouter();
-    // Use useTheme() para gerenciar o tema (chamado incondicionalmente)
-    const { theme, setTheme } = useTheme(); // <-- useTheme chamado incondicionalmente
-    const [mounted, setMounted] = useState(false); // Estado para verificar se montou no cliente
+    const { theme, setTheme } = useTheme();
+    const [mounted, setMounted] = useState(false);
 
-    const [activeTab, setActiveTab] = useState('dashboard'); // Estado da aba ativa
-    // Você pode remover ou adaptar estes estados se os componentes de view gerenciarem seus próprios dados carregados do Firestore
-    const [trainings, setTrainings] = useState<Training[]>(initialTrainings);
+    const [activeTab, setActiveTab] = useState('dashboard');
 
-    // Estado para controlar se as seções colapsáveis estão abertas (adapte)
-    const [openSections, setOpenSections] = useState({
-        pricing: true,
-        bids: true,
-    });
-
-
-    // Efeito para verificar montagem no cliente (útil para coisas como useTheme)
     useEffect(() => {
         setMounted(true);
     }, []);
 
+    useEffect(() => {
+        console.log('Auth state:', { loading, user: user ? { email: user.email, role: user.role } : null });
+        console.log('Admin check:', { adminLoading, hasAnyAdmin });
+        console.log('Is admin?', user?.role === 'admin');
+        if (!loading && !user) {
+            console.log('Redirecting to login...');
+            router.push('/login');
+        }
+    }, [user, loading, router, adminLoading, hasAnyAdmin]);
 
-    // Efeito para redirecionamento removido
-    // useEffect(() => { ... }, [user, loading, router]);
 
-
-    // Definição dos Itens de Navegação (adapte do seu código original)
+    // Definir itens de navegação
     const navItems: NavItem[] = [
-        { id: 'dashboard', label: 'Dashboard', icon: <BarChart size={20} /> },
+        {
+            id: 'dashboard',
+            label: 'Dashboard',
+            icon: <BarChart className="h-4 w-4" />
+        },
         {
             id: 'pricing',
             label: 'Precificação',
-            icon: <Calculator size={20} />,
+            icon: <Calculator className="h-4 w-4" />,
             subItems: [
-                { id: 'calculator-pabx-sip', label: 'PABX/SIP', icon: <Phone size={16} /> },
-                { id: 'calculator-maquinas-virtuais', label: 'Máquinas Virtuais', icon: <Server size={16} /> },
-                { id: 'calculator-fiber-link', label: 'Link via Fibra', icon: <Wifi size={16} /> },
-                { id: 'calculator-radio-internet', label: 'Internet via Rádio', icon: <Radio size={16} /> },
+                { id: 'calculator-pabx-sip', label: 'PABX/SIP', icon: <Phone className="h-4 w-4" /> },
+                { id: 'calculator-maquinas-virtuais', label: 'Máquinas Virtuais', icon: <Server className="h-4 w-4" /> },
+                { id: 'calculator-fiber-link', label: 'Fiber Link', icon: <Wifi className="h-4 w-4" /> },
+                { id: 'calculator-radio-internet', label: 'Rádio Internet', icon: <Radio className="h-4 w-4" /> }
             ]
         },
-        { id: 'it-assessment', label: 'Assessment de TI', icon: <CheckSquare size={20} /> },
-        { id: 'poc', label: 'Provas de Conceito POC', icon: <BarChart3 size={20} /> },
-        { 
-          id: 'site-survey', 
-          label: 'Site Survey', 
-          icon: <ClipboardList size={20} />,
-          href: '/site-survey'
+        {
+            id: 'tools',
+            label: 'Ferramentas',
+            icon: <CheckSquare className="h-4 w-4" />,
+            subItems: [
+                { id: 'site-survey', label: 'Site Survey', icon: <MapPin className="h-4 w-4" /> },
+                { id: 'it-assessment', label: 'Assessment de TI', icon: <BarChart3 className="h-4 w-4" /> },
+                { id: 'poc', label: 'Provas de Conceito (POC)', icon: <ClipboardList className="h-4 w-4" /> }
+            ]
         },
+        // Adicionar gerenciamento de usuários apenas para administradores
+        ...(user?.role === 'admin' ? [{
+            id: 'admin',
+            label: 'Administração',
+            icon: <Shield className="h-4 w-4" />,
+            subItems: [
+                { id: 'user-management', label: 'Gerenciar Usuários', icon: <Users className="h-4 w-4" /> }
+            ]
+        }] : [])
     ];
 
     // Lógica para encontrar o item de navegação atual (adapte)
@@ -106,29 +109,96 @@ export default function App() { // Ou Home
     }, [activeTab]);
 
 
-    // Função para Renderizar o Conteúdo da View Ativa (adapte do seu código original)
+    // Função para Renderizar o Conteúdo da View Ativa com Suspense
     const renderContent = () => {
-        // NOTA: Os componentes de view (DashboardView, PartnerView, etc.) agora devem gerenciar seus próprios dados.
-        // Remova a dependência de useAuth() dentro deles, se houver.
+        const LoadingSpinner = () => (
+            <div className="flex justify-center items-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+        );
 
         switch (activeTab) {
-            case 'dashboard': return <DashboardView />;
-            // Removed distributors, suppliers, ro-management, training-management, quotes, and proposals cases
-            // Removed calculator-ti-vls case (Venda/Locação/Serviços) as requested
-            case 'calculator-pabx-sip': return <PABXSIPCalculator />;
-            case 'calculator-maquinas-virtuais': return <MaquinasVirtuaisCalculator />;
-            case 'calculator-fiber-link': return <FiberLinkCalculator />;
-            case 'calculator-radio-internet': return <RadioInternetCalculator />;
-
-            // Removed bids-analyzer, bids-analysis, bids-docs, rfp, price-records cases
-            case 'it-assessment': return <iframe src="/it-assessment.html" className="w-full h-screen border-0" title="Assessment de TI" />;
-            case 'poc': return <iframe src="/poc-management.html" className="w-full h-screen border-0" title="Provas de Conceito POC" />;
-            default: return <DashboardView />;
+            case 'dashboard': 
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <DashboardView />
+                    </Suspense>
+                );
+            case 'calculator-pabx-sip': 
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <PABXSIPCalculator />
+                    </Suspense>
+                );
+            case 'calculator-maquinas-virtuais': 
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <MaquinasVirtuaisCalculator />
+                    </Suspense>
+                );
+            case 'calculator-fiber-link': 
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <FiberLinkCalculator />
+                    </Suspense>
+                );
+            case 'calculator-radio-internet': 
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <RadioInternetCalculator />
+                    </Suspense>
+                );
+            case 'user-management':
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <UserManagement />
+                    </Suspense>
+                );
+            case 'site-survey':
+                return <iframe src="/site-survey" className="w-full h-screen border-0" title="Site Survey" />;
+            case 'it-assessment': 
+                return <iframe src="/it-assessment.html" className="w-full h-screen border-0" title="Assessment de TI" />;
+            case 'poc': 
+                return <iframe src="/poc-management.html" className="w-full h-screen border-0" title="Provas de Conceito POC" />;
+            default: 
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <DashboardView />
+                    </Suspense>
+                );
         }
     };
 
 
-    // **Renderização da UI completa da página principal (sem verificações de autenticação)**
+    // Show loading while checking auth and admin status
+    if (loading || adminLoading) {
+        return (
+            <div className="flex justify-center items-center min-h-screen bg-background">
+                <Loader2 className="h-16 w-16 animate-spin text-primary" />
+                <p className="ml-4">Carregando...</p>
+            </div>
+        );
+    }
+
+    // Show admin setup if no admin exists in the system
+    if (!hasAnyAdmin) {
+        return (
+            <div className="min-h-screen bg-background">
+                <Suspense fallback={
+                    <div className="flex justify-center items-center min-h-screen">
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                }>
+                    <AdminSetup />
+                </Suspense>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return null; // useEffect will redirect to login
+    }
+
     return (
         <div className="min-h-screen font-body bg-background text-foreground transition-colors duration-500">
             <div className="flex">
@@ -223,8 +293,12 @@ export default function App() { // Ou Home
                             )}
                         </Button>
 
-                        {/* Botão de Logout removido */}
-                        {/* <Button onClick={logout} variant="destructive" className="w-full"> ... </Button> */}
+                        {user && (
+                            <Button onClick={logout} variant="destructive" className="w-full">
+                                <LogOut className="mr-2 h-4 w-4" />
+                                Sair
+                            </Button>
+                        )}
                     </div>
                 </aside>
 
@@ -238,8 +312,15 @@ export default function App() { // Ou Home
                             <h1 className="text-3xl font-bold text-foreground capitalize">{currentNavItem.parentLabel || currentNavItem.label}</h1>
                             {currentNavItem.parentLabel && <p className="text-sm text-muted-foreground">{currentNavItem.label}</p>}
                         </div>
-                        {/* Info do Usuário Logado removido ou adaptado */}
-                        {/* <div className="flex items-center space-x-4"> ... </div> */}
+                        {user && (
+                            <div className="flex items-center space-x-4">
+                                <div className="text-right">
+                                    <p className="text-sm font-medium text-foreground">{user.email}</p>
+                                    <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
+                                </div>
+                                <User className="h-8 w-8 text-primary" />
+                            </div>
+                        )}
                     </header>
 
                     {/* Área de Conteúdo Principal - Renderiza a view ativa */}

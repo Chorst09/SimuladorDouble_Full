@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Edit, Trash2, PlusCircle, FileDown, User, Calendar, DollarSign, FileText, Briefcase } from 'lucide-react';
 import type { Proposal, Partner } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ interface ProposalsViewProps {
 }
 
 const ProposalsView: React.FC<ProposalsViewProps> = ({ proposals, partners, onSave, onDelete }) => {
+  const router = useRouter();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProposal, setEditingProposal] = useState<Proposal | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -60,7 +62,7 @@ const ProposalsView: React.FC<ProposalsViewProps> = ({ proposals, partners, onSa
   };
 
   const handleCreate = () => {
-    setShowProposalTypeDialog(true);
+    router.push('/calculators/maquinas-virtuais');
   };
 
   const handleProposalTypeSelect = (type: 'commercial' | 'technical') => {

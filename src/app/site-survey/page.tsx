@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { CustomerInfoForm } from '@/components/survey/CustomerInfoForm';
 import { DetailedSiteSurveyForm } from '@/components/survey/DetailedSiteSurveyForm';
-// import { TopologyViewer } from '@/components/topology/TopologyViewer';
-// import { TopologyConfig } from '@/components/topology/types/topology';
+import { TopologyViewer } from '@/components/topology/TopologyViewer';
+import { TopologyConfig } from '@/components/topology/types/topology';
 import { SurveyDetailsView } from '@/components/survey/SurveyDetailsView';
 import { Plus, ArrowLeft, Trash2, Eye } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';

@@ -1,12 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Permite leitura e escrita para a coleção site_surveys
-    match /site_surveys/{document} {
-      allow read, write: if true;
-    }
-    
-    // Permite leitura e escrita para outras coleções que possam existir
     match /{document=**} {
       allow read, write: if true;
     }

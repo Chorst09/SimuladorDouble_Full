@@ -31,11 +31,14 @@ import {
     Cpu,
     MemoryStick,
     HardDrive,
-    Network
+    Network,
+    PlusCircle,
+    FilePenLine
 } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
-import { ClientManagerForm, ClientData, AccountManagerData } from './ClientManagerForm';
-import { ClientManagerInfo } from './ClientManagerInfo';
+
+// Import shared components
+import { ClientManagerForm, ClientData, AccountManagerData } from '@/components/calculators/ClientManagerForm';
+import { ClientManagerInfo } from '@/components/calculators/ClientManagerInfo';
 
 // Interfaces
 interface PABXTier {
@@ -69,7 +72,7 @@ interface SIPResult {
 }
 
 // Interface para um produto adicionado à proposta
-type ProductType = 'VM_BASICA' | 'VM_AVANCADA' | 'VM_PREMIUM';
+type ProductType = 'VM' | 'PABX' | 'SIP';
 
 interface Product {
     id: string;
@@ -81,7 +84,8 @@ interface Product {
 }
 
 interface Proposal {
-    id: string;
+    id: string; // ID do documento no Firestore
+    userId: string; // ID do usuário que criou a proposta
     client: ClientData;
     accountManager: AccountManagerData;
     products: Product[];
@@ -90,11 +94,20 @@ interface Proposal {
     createdAt: string;
 }
 
-const MaquinasVirtuaisCalculator: React.FC = () => {
+import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/hooks/use-auth';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+
+
+const MaquinasVirtuaisCalculator = () => {
+    const { user } = useAuth();
+
     // Estados de gerenciamento de propostas
+    const [proposals, setProposals] = useState<Proposal[]>([]);
     const [currentProposal, setCurrentProposal] = useState<Proposal | null>(null);
     const [viewMode, setViewMode] = useState<'search' | 'client-form' | 'calculator'>('search');
-    const [proposals, setProposals] = useState<Proposal[]>([]);
+    const [showClientForm, setShowClientForm] = useState(false);
     const [searchTerm, setSearchTerm] = useState<string>('');
 
     // Estados dos dados do cliente e gerente
@@ -128,17 +141,46 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
     const [sipIncludeSetup, setSipIncludeSetup] = useState<boolean>(true);
     const [sipResult, setSipResult] = useState<SIPResult | null>(null);
 
+    useEffect(() => {
+        const fetchProposals = async () => {
+            if (!user || !user.role || !db) {
+                setProposals([]);
+                return;
+            }
+
+            const proposalsCol = collection(db, 'proposals');
+            let q;
+            if (user.role === 'admin') {
+                q = query(proposalsCol);
+            } else {
+                q = query(proposalsCol, where('userId', '==', user.uid));
+            }
+
+            try {
+                const querySnapshot = await getDocs(q);
+                const proposalsData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Proposal));
+                setProposals(proposalsData);
+            } catch (error) {
+                console.error("Erro ao buscar propostas: ", error);
+            }
+        };
+
+        fetchProposals();
+    }, [user]);
+
     // Estados para regime tributário
     const [selectedTaxRegime, setSelectedTaxRegime] = useState<string>('lucro_real');
     const [pisCofins, setPisCofins] = useState<string>('3,65');
     const [iss, setIss] = useState<string>('5,00');
     const [csllIr, setCsllIr] = useState<string>('8,88');
 
-    // Estados para configurações de preço
-    const [markup, setMarkup] = useState<number>(30);
-    const [estimatedNetMargin, setEstimatedNetMargin] = useState<number>(0);
-    const [commissionPercentage, setCommissionPercentage] = useState<number>(3);
-    const [setupFee, setSetupFee] = useState<number>(500);
+    // Cálculo do total de impostos
+    const totalTaxes = useMemo(() => {
+        const pisCofinsParsed = parseFloat(pisCofins.replace(',', '.')) || 0;
+        const issParsed = parseFloat(iss.replace(',', '.')) || 0;
+        const csllIrParsed = parseFloat(csllIr.replace(',', '.')) || 0;
+        return pisCofinsParsed + issParsed + csllIrParsed;
+    }, [pisCofins, iss, csllIr]);
 
     // Estado para controle de abas
     const [activeTab, setActiveTab] = useState<string>('calculator');
@@ -156,6 +198,24 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
     const [vmSnapshot, setVmSnapshot] = useState<boolean>(false);
     const [vmVpnSiteToSite, setVmVpnSiteToSite] = useState<boolean>(false);
     const [vmContractPeriod, setVmContractPeriod] = useState<number>(12);
+
+    // Estados para configurações de preço
+    const [markup, setMarkup] = useState<number>(30);
+    const [estimatedNetMargin, setEstimatedNetMargin] = useState<number>(0);
+    const [commissionPercentage, setCommissionPercentage] = useState<number>(3);
+    const [setupFee, setSetupFee] = useState<number>(500);
+
+    // Cálculo do desconto contratual baseado no período
+    const contractDiscount = useMemo(() => {
+        switch (vmContractPeriod) {
+            case 12: return 0;
+            case 24: return 5;
+            case 36: return 10;
+            case 48: return 15;
+            case 60: return 20;
+            default: return 0;
+        }
+    }, [vmContractPeriod]);
 
     // Estados para custos de recursos VM
     const [vcpuWindowsCost, setVcpuWindowsCost] = useState<number>(15);
@@ -522,32 +582,117 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
         }
     };
 
-    // Efeitos para cálculos e salvar propostas
-    useEffect(() => {
-        const savedProposals = localStorage.getItem('proposals');
-        if (savedProposals) {
-            setProposals(JSON.parse(savedProposals));
-        }
-    }, []);
-
-    useEffect(() => {
-        calculatePabxPrice();
-    }, [pabxExtensions, pabxIncludeDevices, pabxDeviceQuantity, pabxIncludeSetup, includeAIAgent, selectedAIAgentPlan]);
-
-    useEffect(() => {
-        const plan = sipPlans.find(p => p.name === selectedSipPlan);
-        if (plan && !plan.monthlyWithEquipment && sipWithEquipment) {
-            setSipWithEquipment(false);
+    // Cálculos VM usando useMemo
+    const calculateVMCost = useMemo(() => {
+        let cost = 0;
+        
+        // Custo de CPU baseado no SO
+        if (vmOperatingSystem.includes('Windows')) {
+            cost += vmCpuCores * vcpuWindowsCost;
         } else {
-            calculateSipPrice();
+            cost += vmCpuCores * vcpuLinuxCost;
         }
-    }, [selectedSipPlan, sipAdditionalChannels, sipWithEquipment, sipIncludeSetup]);
+        
+        // Custo de RAM
+        cost += vmRamGb * ramCost;
+        
+        // Custo de Storage
+        if (vmStorageType === 'HDD SAS') {
+            cost += vmStorageSize * hddSasCost;
+        } else if (vmStorageType === 'SSD Performance') {
+            cost += vmStorageSize * ssdPerformanceCost;
+        } else if (vmStorageType === 'NVMe') {
+            cost += vmStorageSize * nvmeCost;
+        }
+        
+        // Custo de Network
+        if (vmNetworkSpeed === '10 Gbps') {
+            cost += network10GbpsCost;
+        }
+        
+        // Custo do Sistema Operacional
+        if (vmOperatingSystem === 'Windows Server 2022') {
+            cost += windowsServerCost;
+        } else if (vmOperatingSystem === 'Windows 10 Pro') {
+            cost += windows10ProCost;
+        }
+        
+        // Serviços adicionais
+        if (vmBackupSize > 0) {
+            cost += vmBackupSize * backupCostPerGb;
+        }
+        if (vmAdditionalIp) {
+            cost += additionalIpCost;
+        }
+        if (vmSnapshot) {
+            cost += snapshotCost;
+        }
+        if (vmVpnSiteToSite) {
+            cost += vpnSiteToSiteCost;
+        }
+        
+        return cost;
+    }, [
+        vmCpuCores, vmRamGb, vmStorageType, vmStorageSize, vmNetworkSpeed, vmOperatingSystem,
+        vmBackupSize, vmAdditionalIp, vmSnapshot, vmVpnSiteToSite,
+        vcpuWindowsCost, vcpuLinuxCost, ramCost, hddSasCost, ssdPerformanceCost, nvmeCost,
+        network10GbpsCost, windowsServerCost, windows10ProCost, backupCostPerGb,
+        additionalIpCost, snapshotCost, vpnSiteToSiteCost
+    ]);
 
-    // Função para alterar regime tributário
+    // Consolida todos os cálculos de preços e valores derivados em um único hook useMemo.
+    // Isso garante a ordem de cálculo correta e evita erros de referência circular.
+    const { vmFinalPrice, markupValue, commissionValue } = useMemo(() => {
+        const baseCostWithTaxes = calculateVMCost + (calculateVMCost * (totalTaxes / 100));
+        const priceWithMarkup = baseCostWithTaxes * (1 + markup / 100);
+        const finalPrice = priceWithMarkup * (1 - contractDiscount / 100);
+
+        const calculatedMarkupValue = baseCostWithTaxes * (markup / 100);
+        const calculatedCommissionValue = finalPrice * (commissionPercentage / 100);
+
+        return {
+            vmFinalPrice: finalPrice || 0,
+            markupValue: calculatedMarkupValue || 0,
+            commissionValue: calculatedCommissionValue || 0,
+        };
+    }, [calculateVMCost, totalTaxes, markup, contractDiscount, commissionPercentage]);
+
+
+
+    const formatCurrency = (value: number) => {
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL',
+        }).format(value);
+    };
+
+    // Funções de manipulação
+    const handleAddVMProduct = () => {
+        const newProduct = {
+            id: Date.now().toString(),
+            type: 'VM',
+            description: `${vmName} - ${vmCpuCores} vCPU, ${vmRamGb}GB RAM, ${vmStorageSize}GB ${vmStorageType}, ${vmOperatingSystem}`,
+            setup: setupFee,
+            monthly: vmFinalPrice,
+            details: {
+                cpuCores: vmCpuCores,
+                ramGb: vmRamGb,
+                storageType: vmStorageType,
+                storageSize: vmStorageSize,
+                operatingSystem: vmOperatingSystem
+            }
+        };
+        setAddedProducts([...addedProducts, newProduct]);
+    };
+
+    const handleRemoveProduct = (productId: string) => {
+        setAddedProducts(addedProducts.filter(p => p.id !== productId));
+    };
+
     const handleTaxRegimeChange = (regime: string) => {
         setSelectedTaxRegime(regime);
         
-        // Definir valores dos impostos conforme o regime
+        // Definir valores padrão para cada regime
         switch (regime) {
             case 'lucro_real':
                 setPisCofins('3,65');
@@ -560,9 +705,9 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
                 setCsllIr('4,80');
                 break;
             case 'lucro_real_reduzido':
-                setPisCofins('0,00');
-                setIss('5,00');
-                setCsllIr('2,40');
+                setPisCofins('1,65');
+                setIss('2,00');
+                setCsllIr('4,80');
                 break;
             case 'simples_nacional':
                 setPisCofins('0,00');
@@ -574,366 +719,81 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
         }
     };
 
-    // Cálculo dos impostos totais
-    const totalTaxes = useMemo(() => {
-        return parseFloat(pisCofins.replace(',', '.')) + 
-               parseFloat(iss.replace(',', '.')) + 
-               parseFloat(csllIr.replace(',', '.'));
-    }, [pisCofins, iss, csllIr]);
-
-    // Função para calcular o custo da VM
-    const calculateVMCost = useMemo(() => {
-        let totalCost = 0;
-
-        // Custo vCPU baseado no OS
-        const isWindows = vmOperatingSystem.includes('Windows');
-        const vcpuCost = isWindows ? vcpuWindowsCost : vcpuLinuxCost;
-        totalCost += vmCpuCores * vcpuCost;
-
-        // Custo RAM
-        totalCost += vmRamGb * ramCost;
-
-        // Custo Armazenamento
-        let storageCost = 0;
-        switch (vmStorageType) {
-            case 'HDD SAS':
-                storageCost = hddSasCost;
-                break;
-            case 'SSD Performance':
-                storageCost = ssdPerformanceCost;
-                break;
-            case 'NVMe':
-                storageCost = nvmeCost;
-                break;
-        }
-        totalCost += vmStorageSize * storageCost;
-
-        // Custo Rede
-        if (vmNetworkSpeed === '10 Gbps') {
-            totalCost += network10GbpsCost;
-        }
-
-        // Custo Sistema Operacional
-        switch (vmOperatingSystem) {
-            case 'Windows Server 2022 Standard':
-                totalCost += windowsServerCost;
-                break;
-            case 'Windows 10 Pro':
-                totalCost += windows10ProCost;
-                break;
-            case 'Ubuntu Server 22.04 LTS':
-                totalCost += ubuntuCost;
-                break;
-            case 'CentOS Stream 9':
-                totalCost += centosCost;
-                break;
-            case 'Debian 12':
-                totalCost += debianCost;
-                break;
-            case 'Rocky Linux 9':
-                totalCost += rockyLinuxCost;
-                break;
-        }
-
-        // Serviços Adicionais
-        if (vmBackupSize > 0) {
-            totalCost += vmBackupSize * backupCostPerGb;
-        }
-        if (vmAdditionalIp) {
-            totalCost += additionalIpCost;
-        }
-        if (vmSnapshot) {
-            totalCost += snapshotCost;
-        }
-        if (vmVpnSiteToSite) {
-            totalCost += vpnSiteToSiteCost;
-        }
-
-        return totalCost;
-    }, [
-        vmCpuCores, vmRamGb, vmStorageType, vmStorageSize, vmNetworkSpeed, vmOperatingSystem,
-        vmBackupSize, vmAdditionalIp, vmSnapshot, vmVpnSiteToSite,
-        vcpuWindowsCost, vcpuLinuxCost, ramCost, hddSasCost, ssdPerformanceCost, nvmeCost,
-        network1GbpsCost, network10GbpsCost, windowsServerCost, windows10ProCost, ubuntuCost,
-        centosCost, debianCost, rockyLinuxCost, backupCostPerGb, additionalIpCost, snapshotCost, vpnSiteToSiteCost
-    ]);
-
-    // Cálculo do desconto por período contratual
-    const contractDiscount = useMemo(() => {
-        switch (vmContractPeriod) {
-            case 12: return 0; // 0% desconto para 12 meses
-            case 24: return 5; // 5% desconto para 24 meses
-            case 36: return 10; // 10% desconto para 36 meses
-            case 48: return 15; // 15% desconto para 48 meses
-            case 60: return 20; // 20% desconto para 60 meses
-            default: return 0;
-        }
-    }, [vmContractPeriod]);
-
-    // Efeito para calcular a margem líquida estimada a partir do markup
-    useEffect(() => {
-        if (markup >= 0) {
-            const margin = (markup / (100 + markup)) * 100;
-            setEstimatedNetMargin(margin);
-        }
-    }, [markup]);
-
-    // Cálculo do preço final com impostos, markup e desconto por período
-    const vmFinalPrice = useMemo(() => {
-        const baseCost = calculateVMCost;
-        const taxAmount = baseCost * (totalTaxes / 100);
-        const costWithTaxes = baseCost + taxAmount;
-        const priceWithMarkup = costWithTaxes * (1 + markup / 100);
-        const finalPrice = priceWithMarkup * (1 - contractDiscount / 100);
-        return finalPrice;
-    }, [calculateVMCost, totalTaxes, markup, contractDiscount]);
-
-    // Função para adicionar VM à proposta
-    const handleAddVMProduct = () => {
-        if (vmName && vmCpuCores && vmRamGb && vmStorageSize) {
-            let description = `${vmName} - ${vmCpuCores} vCPU, ${vmRamGb}GB RAM, ${vmStorageSize}GB ${vmStorageType}, ${vmNetworkSpeed}, ${vmOperatingSystem}`;
-            
-            // Adicionar serviços adicionais à descrição
-            const additionalServices = [];
-            if (vmBackupSize > 0) additionalServices.push(`Backup ${vmBackupSize}GB`);
-            if (vmAdditionalIp) additionalServices.push('IP Adicional');
-            if (vmSnapshot) additionalServices.push('Snapshot');
-            if (vmVpnSiteToSite) additionalServices.push('VPN Site-to-Site');
-            
-            if (additionalServices.length > 0) {
-                description += ` + ${additionalServices.join(', ')}`;
-            }
-            
-            description += ` (${vmContractPeriod} meses)`;
-
-            const vmProduct = {
-                id: generateUniqueId(),
-                type: 'VM',
-                description,
-                setup: setupFee,
-                monthly: vmFinalPrice,
-                details: { 
-                    name: vmName,
-                    cpuCores: vmCpuCores,
-                    ramGb: vmRamGb,
-                    storageType: vmStorageType,
-                    storageSize: vmStorageSize,
-                    networkSpeed: vmNetworkSpeed,
-                    operatingSystem: vmOperatingSystem,
-                    backupSize: vmBackupSize,
-                    additionalIp: vmAdditionalIp,
-                    snapshot: vmSnapshot,
-                    vpnSiteToSite: vmVpnSiteToSite,
-                    contractPeriod: vmContractPeriod
-                }
-            };
-
-            setAddedProducts(prev => [...prev, vmProduct]);
-            
-            // Mostrar mensagem de sucesso
-            alert(`VM "${vmName}" adicionada à proposta com sucesso! Você pode configurar e adicionar mais VMs ou ir para o resumo.`);
-            
-            // Limpar campos para permitir configurar nova VM (opcional)
-            // Mantém os valores para facilitar configuração de VMs similares
-            setVmName(`VM ${addedProducts.length + 2}`); // Incrementa o nome automaticamente
-        } else {
-            alert('Por favor, configure todos os campos obrigatórios da VM antes de adicionar à proposta.');
-        }
-    };
-
-    // Função para remover produto da proposta
-    const handleRemoveProduct = (productId: string) => {
-        setAddedProducts(prev => prev.filter(p => p.id !== productId));
-    };
-
-    // Funções auxiliares
-    const formatCurrency = (value: number) => `R$ ${value.toFixed(2).replace('.', ',')}`;
-    const generateUniqueId = () => `_${Math.random().toString(36).substr(2, 9)}`;
-
-    // Lógica de Produtos
-    const handleAddPabxProduct = () => {
-        if (pabxResult) {
-            let products = [];
-
-            // Produto PABX Principal
-            products.push({
-                id: generateUniqueId(),
-                type: 'PABX',
-                description: `PABX em Nuvem para ${pabxExtensions} ramais`,
-                setup: pabxResult.setup,
-                monthly: pabxResult.baseMonthly,
-                details: { extensions: pabxExtensions }
-            });
-
-            // Produto Aluguel de Aparelhos
-            if (pabxIncludeDevices && pabxDeviceQuantity > 0 && pabxResult.deviceRentalCost > 0) {
-                products.push({
-                    id: generateUniqueId(),
-                    type: 'PABX',
-                    description: `Aluguel de ${pabxDeviceQuantity} aparelho(s) IP`,
-                    setup: 0,
-                    monthly: pabxResult.deviceRentalCost,
-                    details: { quantity: pabxDeviceQuantity }
-                });
-            }
-
-            // Produto Agente IA
-            if (pabxResult && pabxResult.aiAgentCost > 0 && selectedAIAgentPlan) {
-                const plan = aiAgentPlans[selectedAIAgentPlan];
-                const description = `${plan.name} (Até: ${plan.messages.split(' ')[0]} msg, ${plan.minutes.split(' ')[0]} min, ${plan.premiumVoice.split(' ')[0]} voz premium)`;
-                products.push({
-                    id: generateUniqueId(),
-                    type: 'PABX',
-                    description: description,
-                    setup: 0,
-                    monthly: pabxResult.aiAgentCost,
-                    details: { plan: selectedAIAgentPlan }
-                });
-            }
-
-            setAddedProducts(prev => [...prev, ...products]);
-        }
-    };
-
-    const handleAddSipProduct = () => {
-        if (sipResult && selectedSipPlan) {
-            const plan = sipPlans.find(p => p.name === selectedSipPlan);
-            if (plan) {
-                const description = `${plan.name}${sipWithEquipment && plan.channels > 0 ? ' com equipamento' : ''}${sipAdditionalChannels > 0 ? ` + ${sipAdditionalChannels} canais adicionais` : ''}`;
-                setAddedProducts(prev => [...prev, {
-                    id: generateUniqueId(),
-                    type: 'SIP',
-                    description,
-                    setup: sipResult.setup,
-                    monthly: sipResult.monthly,
-                    details: { plan: selectedSipPlan, additionalChannels: sipAdditionalChannels, withEquipment: sipWithEquipment }
-                }]);
-            }
-        }
-    };
-
-
-
-    // Lógica de Gerenciamento de Propostas
-    useEffect(() => {
-        const savedProposals = localStorage.getItem('proposals');
-        if (savedProposals) {
-            setProposals(JSON.parse(savedProposals));
-        }
-    }, []);
-
-    useEffect(() => {
-        if (proposals.length > 0) {
-            localStorage.setItem('proposals', JSON.stringify(proposals));
-        }
-    }, [proposals]);
-
-    const totalSetup = addedProducts.reduce((sum, p) => sum + p.setup, 0);
-    const totalMonthly = addedProducts.reduce((sum, p) => sum + p.monthly, 0);
-
-    const markupValue = useMemo(() => {
-        const baseCost = addedProducts.reduce((sum, p) => {
-            // Assumindo que o custo base pode ser derivado do preço mensal sem markup
-            // Esta é uma simplificação. O ideal seria ter o custo base armazenado no produto.
-            return sum + (p.monthly / (1 + markup / 100));
-        }, 0);
-        return totalMonthly - baseCost;
-    }, [addedProducts, totalMonthly, markup]);
-
-    const commissionValue = useMemo(() => {
-        return totalMonthly * (commissionPercentage / 100);
-    }, [totalMonthly, commissionPercentage]);
-
-    const generateProposalId = (): string => {
-        const now = new Date();
-        const year = now.getFullYear().toString().slice(-2);
-        const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const day = now.getDate().toString().padStart(2, '0');
-        const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-        return `PROP-${year}${month}${day}-${random}`;
-    };
-
-    const clearForm = () => {
-        setClientName('');
-        setAccountManager('');
-        setAddedProducts([]);
-        setPabxExtensions(0);
-        setPabxIncludeDevices(false);
-        setPabxDeviceQuantity(0);
-        setIncludeAIAgent(false);
-        setSelectedAIAgentPlan('');
-        setSelectedSipPlan('');
-        setSipAdditionalChannels(0);
-        setSipWithEquipment(false);
-    };
-
     const createNewProposal = () => {
-        // Limpar dados do formulário
+        setCurrentProposal(null);
         setClientData({ name: '', email: '', phone: '' });
         setAccountManagerData({ name: '', email: '', phone: '' });
+        setAddedProducts([]);
         setViewMode('client-form');
     };
 
     const editProposal = (proposal: Proposal) => {
         setCurrentProposal(proposal);
-        setClientName(proposal.clientName);
-        setAccountManager(proposal.accountManager);
+        setClientData(proposal.client);
+        setAccountManagerData(proposal.accountManager);
         setAddedProducts(proposal.products);
-        setViewMode('edit');
+        setViewMode('calculator');
     };
 
-    const saveProposal = () => {
-        if (viewMode === 'create' || viewMode === 'edit') {
-            const proposalToSave: Proposal = {
-                ...(currentProposal as Proposal),
-                clientName,
-                accountManager,
-                products: addedProducts,
-                totalSetup,
-                totalMonthly,
-                date: currentProposal?.date || new Date().toLocaleDateString('pt-BR')
-            };
-
-            if (viewMode === 'create') {
-                setProposals(prev => [...prev, proposalToSave]);
-            } else {
-                setProposals(prev => prev.map(p => p.id === proposalToSave.id ? proposalToSave : p));
+    const deleteProposal = async (proposalId: string) => {
+        if (!db) {
+            console.error('Firebase não está disponível');
+            return;
+        }
+        
+        if (window.confirm('Tem certeza que deseja excluir esta proposta?')) {
+            try {
+                await deleteDoc(doc(db, 'proposals', proposalId));
+                setProposals(proposals.filter(p => p.id !== proposalId));
+            } catch (error) {
+                console.error('Erro ao excluir proposta:', error);
+                alert('Falha ao excluir a proposta.');
             }
-
-            setViewMode('search');
-            setCurrentProposal(null);
-            clearForm();
         }
     };
 
-    const cancelAction = () => {
-        setViewMode('search');
-        setCurrentProposal(null);
-        clearForm();
+    const handleSaveProposal = async () => {
+        if (!user) {
+            alert('Você precisa estar logado para salvar uma proposta.');
+            return;
+        }
+
+        const totalSetup = addedProducts.reduce((acc, product) => acc + product.setup, 0);
+        const totalMonthly = addedProducts.reduce((acc, product) => acc + product.monthly, 0);
+
+        const proposalData = {
+            userId: user.uid,
+            client: clientData,
+            accountManager: accountManagerData,
+            products: addedProducts,
+            totalSetup,
+            totalMonthly,
+            createdAt: serverTimestamp(),
+        };
+
+        try {
+            if (currentProposal) {
+                // Atualizar proposta existente
+                const proposalRef = doc(db, 'proposals', currentProposal.id);
+                await updateDoc(proposalRef, proposalData);
+                alert('Proposta atualizada com sucesso!');
+            } else {
+                // Criar nova proposta
+                const docRef = await addDoc(collection(db, 'proposals'), proposalData);
+                alert('Proposta salva com sucesso!');
+                setCurrentProposal({ ...proposalData, id: docRef.id, createdAt: new Date().toISOString() });
+            }
+            // Atualizar a lista de propostas
+            const q = user.role === 'admin' ? query(collection(db, 'proposals')) : query(collection(db, 'proposals'), where('userId', '==', user.uid));
+            const querySnapshot = await getDocs(q);
+            const proposalsData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Proposal));
+            setProposals(proposalsData);
+            setViewMode('search');
+        } catch (error) {
+            console.error('Erro ao salvar proposta:', error);
+            alert('Ocorreu um erro ao salvar a proposta.');
+        }
     };
-
-    const filteredProposals = (proposals || []).filter(p =>
-        p.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.id.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const handlePrint = () => window.print();
-
-    // Se estiver na tela de formulário do cliente, mostrar o formulário
-    if (viewMode === 'client-form') {
-        return (
-            <ClientManagerForm
-                clientData={clientData}
-                accountManagerData={accountManagerData}
-                onClientDataChange={setClientData}
-                onAccountManagerDataChange={setAccountManagerData}
-                onBack={() => setViewMode('search')}
-                onContinue={() => setViewMode('calculator')}
-                title="Nova Proposta - Máquinas Virtuais"
-                subtitle="Preencha os dados do cliente e gerente de contas para continuar."
-            />
-        );
-    }
 
     return (
         <>
@@ -945,39 +805,37 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
                             <CardDescription>Encontre propostas existentes ou crie uma nova.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex gap-4 mb-4">
+                            <div className="flex justify-between items-center mb-4">
                                 <Input
                                     type="text"
-                                    placeholder="Buscar por cliente ou ID..."
+                                    placeholder="Buscar por cliente..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="bg-slate-800 border-slate-700 text-white"
+                                    className="max-w-sm bg-slate-800 border-slate-700 text-white"
                                 />
-                                <Button onClick={createNewProposal} className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4 mr-2" />Nova Proposta</Button>
+                                <Button onClick={createNewProposal} className="bg-blue-600 hover:bg-blue-700">
+                                    <PlusCircle className="mr-2 h-4 w-4" /> Nova Proposta
+                                </Button>
                             </div>
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="border-slate-700">
-                                            <TableHead className="text-white">ID</TableHead>
-                                            <TableHead className="text-white">Cliente</TableHead>
-                                            <TableHead className="text-white">Data</TableHead>
-                                            <TableHead className="text-white">Total Mensal</TableHead>
-                                            <TableHead className="text-white">Ações</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {filteredProposals.map(p => (
-                                            <TableRow key={p.id} className="border-slate-800">
-                                                <TableCell>{p.id}</TableCell>
-                                                <TableCell>{p.clientName}</TableCell>
-                                                <TableCell>{p.date}</TableCell>
-                                                <TableCell>{formatCurrency(p.totalMonthly)}</TableCell>
-                                                <TableCell><Button variant="outline" size="sm" onClick={() => editProposal(p)}><Edit className="h-4 w-4" /></Button></TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                            <div className="space-y-4">
+                                {proposals
+                                    .filter(p => p.client.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                                    .map((p: Proposal) => (
+                                        <div key={p.id} className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg">
+                                            <div>
+                                                <p className="font-semibold">{p.client.name}</p>
+                                                <p className="text-sm text-slate-400">Total: {formatCurrency(p.totalMonthly)}/mês + {formatCurrency(p.totalSetup)} setup</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button variant="outline" size="sm" onClick={() => editProposal(p)}>
+                                                    <FilePenLine className="mr-2 h-4 w-4" /> Editar
+                                                </Button>
+                                                <Button variant="destructive" size="sm" onClick={() => deleteProposal(p.id)}>
+                                                    <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
                             </div>
                         </CardContent>
                     </Card>
@@ -997,12 +855,31 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
                                     ← Voltar para Buscar
                                 </Button>
                             </div>
-                            
-                            {/* Informações do Cliente e Gerente */}
-                            <ClientManagerInfo 
-                                clientData={clientData}
-                                accountManagerData={accountManagerData}
-                            />
+                            {viewMode === 'client-form' || showClientForm ? (
+                                <ClientManagerForm
+                                    clientData={clientData}
+                                    accountManagerData={accountManagerData}
+                                    onClientDataChange={setClientData}
+                                    onAccountManagerDataChange={setAccountManagerData}
+                                    onBack={() => {
+                                        setShowClientForm(false);
+                                        if (viewMode === 'client-form') {
+                                            setViewMode('search');
+                                        }
+                                    }}
+                                    onContinue={() => {
+                                        setShowClientForm(false);
+                                        if (viewMode === 'client-form') {
+                                            setViewMode('calculator');
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <ClientManagerInfo
+                                    clientData={clientData}
+                                    accountManagerData={accountManagerData}
+                                />
+                            )}
                         </div>
 
                         <div>
@@ -1816,9 +1693,9 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
 
 
                         <div className="flex justify-end gap-4 mt-8">
-                            <Button onClick={saveProposal} className="bg-green-600 hover:bg-green-700"><Save className="h-4 w-4 mr-2" />Salvar Proposta</Button>
-                            <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700" disabled={addedProducts.length === 0}><Download className="h-4 w-4 mr-2" />Gerar PDF</Button>
-                            <Button variant="outline" onClick={cancelAction}>Cancelar</Button>
+                            <Button onClick={handleSaveProposal} className="bg-green-600 hover:bg-green-700"><Save className="h-4 w-4 mr-2" />Salvar Proposta</Button>
+                            <Button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700" disabled={addedProducts.length === 0}><Download className="h-4 w-4 mr-2" />Gerar PDF</Button>
+                            <Button variant="outline" onClick={() => setViewMode('search')}>Cancelar</Button>
                         </div>
                     </>
                 )}
@@ -1830,9 +1707,9 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
                         <div className="print-header">
                             <h1>Proposta Comercial</h1>
                             <p><strong>Proposta ID:</strong> {currentProposal.id}</p>
-                            <p><strong>Cliente:</strong> {clientName}</p>
-                            <p><strong>Gerente:</strong> {accountManager}</p>
-                            <p><strong>Data:</strong> {currentProposal.date}</p>
+                            <p><strong>Cliente:</strong> {clientData.name}</p>
+                            <p><strong>Gerente:</strong> {accountManagerData.name}</p>
+                            <p><strong>Data:</strong> {new Date(currentProposal.createdAt).toLocaleDateString('pt-BR')}</p>
                         </div>
                         <h2>Itens da Proposta</h2>
                         <table className="print-table">
@@ -1845,8 +1722,8 @@ const MaquinasVirtuaisCalculator: React.FC = () => {
                         </table>
                         <div className="print-totals">
                             <h3>Total Geral</h3>
-                            <p><strong>Total Instalação:</strong> {formatCurrency(totalSetup)}</p>
-                            <p><strong>Total Mensal:</strong> {formatCurrency(totalMonthly)}</p>
+                            <p><strong>Total Instalação:</strong> {formatCurrency(addedProducts.reduce((sum, p) => sum + p.setup, 0))}</p>
+                            <p><strong>Total Mensal:</strong> {formatCurrency(addedProducts.reduce((sum, p) => sum + p.monthly, 0))}</p>
                         </div>
                     </>
                 )}

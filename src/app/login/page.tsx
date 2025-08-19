@@ -2,67 +2,85 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-// Importação de useAuth removida
-// import { useAuth } from "@/hooks/use-auth";
 import { useRouter } from 'next/navigation';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-// Importação de Loader2 removida se não for mais usada
-// import { Loader2 } from 'lucide-react';
-// Importação de useToast removida se não for mais usada
-// import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { app } from '@/lib/firebase';
 import Link from 'next/link';
 
-
 const LoginPage = () => {
-  // Estados de email/senha podem ser removidos se não houver formulário
-  // const [email, setEmail] = useState('');
-  // const [password, setPassword] = useState('');
-  // Chamada e uso de useAuth removidos
-  // const { user, loading, error, login, loginWithEmailPassword } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  // Chamada a useToast removida
-  // const { toast } = useToast();
+  const { toast } = useToast();
 
-  // Efeito para redirecionar removido
-  // useEffect(() => { ... }, [user, loading, router]);
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-  // Lógica para login com email e senha removida
-  // const handleEmailPasswordLogin = async (e: React.FormEvent) => { ... };
+    if (!app) {
+      setError('Firebase não está configurado');
+      toast({ title: 'Erro no login', description: 'Serviço indisponível.', variant: 'destructive' });
+      setLoading(false);
+      return;
+    }
 
-  // Lógica para login com Google removida
-  // const handleGoogleLogin = async () => { ... };
+    const auth = getAuth(app);
 
-  // Lógica para continuar sem login mantida
-  const handleContinueWithoutLogin = () => {
-    router.push('/'); // Redireciona para a página principal
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      toast({ title: 'Login bem-sucedido!', description: 'Você será redirecionado.' });
+      // Aguardar um pouco para o estado de auth atualizar
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 500);
+    } catch (err: any) {
+      setError(err.message);
+      toast({ title: 'Erro no login', description: 'Verifique suas credenciais.', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-
-  // Renderiza o formulário simplificado (apenas com a opção de continuar sem login)
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
-      <Card className="w-[350px]">
+    <div className="flex min-h-screen items-center justify-center bg-background">
+      <Card className="w-[400px]">
         <CardHeader>
-          <CardTitle className="text-2xl text-center">Acesso</CardTitle>
+          <CardTitle className="text-2xl text-center">Acessar sua Conta</CardTitle>
           <CardDescription className="text-center">
-            Continue para acessar a aplicação.
+            Insira seu e-mail e senha para continuar.
           </CardDescription>
         </CardHeader>
         <CardContent>
-           {/* Botão Continuar sem Login */}
-           <Button
-             onClick={handleContinueWithoutLogin}
-             className="w-full mt-4 text-center"
-           >
-             Continuar
-           </Button>
-
-          {/* Links de cadastro e login removidos ou modificados */}
-          {/* <div className="mt-4 text-center text-sm"> ... </div> */}
-
+          <form onSubmit={handleLogin}>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" type="email" placeholder="seu@email.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Senha</Label>
+                <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Entrando...' : 'Entrar'}
+              </Button>
+              {error && <p className="text-red-500 text-sm text-center mt-2">{error}</p>}
+            </div>
+          </form>
+          <div className="mt-4 text-center text-sm">
+            Não tem uma conta?{' '}
+            <Link href="/signup" className="underline">
+              Cadastre-se
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
