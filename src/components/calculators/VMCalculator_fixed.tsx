@@ -147,7 +147,7 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
   });
 
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [viewMode, setViewMode] = useState<'search' | 'create' | 'edit'>('search');
+  const [viewMode, setViewMode] = useState<'search' | 'create' | 'edit' | 'proposal-summary'>('search');
   const [activeTab, setActiveTab] = useState<'config' | 'summary' | 'negotiations' | 'settings'>('config');
   const [searchTerm, setSearchTerm] = useState('');
   const [proposalSearchTerm, setProposalSearchTerm] = useState('');
@@ -256,6 +256,11 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
     });
     setViewMode('create');
     setActiveTab('config');
+  };
+
+  const viewProposal = (proposal: Proposal) => {
+    setCurrentProposal(proposal);
+    setViewMode('proposal-summary');
   };
 
   const editProposal = (proposal: Proposal) => {
@@ -435,7 +440,7 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                             <td className="py-3 px-4 text-white">{proposal.proposalNumber}</td>
                             <td className="py-3 px-4 text-white">{proposal.clientName}</td>
                             <td className="py-3 px-4 text-slate-300">
-                              {new Date(proposal.date).toLocaleDateString('pt-BR')}
+                              {proposal.date ? (isNaN(new Date(proposal.date).getTime()) ? 'N/A' : new Date(proposal.date).toLocaleDateString('pt-BR')) : 'N/A'}
                             </td>
                             <td className="py-3 px-4 text-green-400 font-semibold">
                               R$ {proposal.totalPrice.toFixed(2)}
@@ -445,18 +450,25 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => editProposal(proposal)}
-                                  className="border-slate-600 text-white hover:bg-slate-600"
+                                  onClick={() => viewProposal(proposal)}
+                                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
                                 >
-                                  <Edit className="h-4 w-4" />
+                                  <Eye className="h-4 w-4 mr-2" /> Visualizar
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => deleteProposal(proposal.id)}
-                                  className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
+                                  onClick={() => editProposal(proposal)}
+                                  className="border-blue-600 text-blue-300 hover:bg-blue-700"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Edit className="h-4 w-4 mr-2" /> Editar
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => deleteProposal(proposal.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" /> Excluir
                                 </Button>
                               </div>
                             </td>
@@ -470,6 +482,113 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                     <FileText className="h-12 w-12 mx-auto mb-4 text-slate-400" />
                     <h3 className="text-lg font-semibold text-white mb-2">Nenhuma proposta encontrada</h3>
                     <p className="text-slate-400">Clique em "Nova Proposta" para começar.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Proposal Summary View */}
+        {viewMode === 'proposal-summary' && currentProposal && (
+          <div className="container mx-auto p-4">
+            <Card className="bg-white border-gray-300 text-black print:shadow-none">
+              <CardHeader className="print:pb-2">
+                <div className="flex justify-between items-start mb-4 print:mb-2">
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Proposta Comercial</h1>
+                    <p className="text-gray-600">Máquinas Virtuais</p>
+                  </div>
+                  <div className="flex gap-2 print:hidden">
+                    <Button variant="outline" onClick={() => setViewMode('search')}>
+                      <ArrowLeft className="h-4 w-4 mr-2" />Voltar
+                    </Button>
+                    <Button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700">
+                      <Download className="h-4 w-4 mr-2" />Imprimir PDF
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6 print:space-y-4">
+                {/* Dados da Proposta */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Dados da Proposta</h3>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Número:</strong> {currentProposal.proposalNumber}</p>
+                      <p><strong>Nome:</strong> {currentProposal.name}</p>
+                      <p><strong>Cliente:</strong> {currentProposal.clientName}</p>
+                      <p><strong>Data:</strong> {currentProposal.date ? (isNaN(new Date(currentProposal.date).getTime()) ? 'N/A' : new Date(currentProposal.date).toLocaleDateString('pt-BR')) : 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Resumo Financeiro</h3>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Total da Proposta:</strong> R$ {currentProposal.totalPrice.toFixed(2)}</p>
+                      <p><strong>Rodada Atual:</strong> {currentProposal.currentRound}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Máquinas Virtuais */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Máquinas Virtuais</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse border border-gray-300">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="border border-gray-300 px-4 py-2 text-left">Nome</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">vCPU</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">RAM (GB)</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">Storage</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">OS</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">Qtd</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentProposal.vms.map((vm, index) => (
+                          <tr key={index}>
+                            <td className="border border-gray-300 px-4 py-2">{vm.name}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.vcpu}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.ram}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.storageSize}GB {vm.storageType}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.os}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.quantity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Rodadas de Negociação */}
+                {currentProposal.negotiationRounds.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Histórico de Negociações</h3>
+                    <div className="space-y-3">
+                      {currentProposal.negotiationRounds.map((round, index) => (
+                        <div key={index} className="border border-gray-300 p-3 rounded">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-semibold">Rodada {round.roundNumber}</h4>
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              round.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                              round.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {round.status === 'accepted' ? 'Aceito' : 
+                               round.status === 'rejected' ? 'Rejeitado' : 'Ativo'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">{round.description}</p>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <p><strong>Data:</strong> {round.date ? (isNaN(new Date(round.date).getTime()) ? 'N/A' : new Date(round.date).toLocaleDateString('pt-BR')) : 'N/A'}</p>
+                            <p><strong>Desconto:</strong> {round.discount}%</p>
+                            <p><strong>Preço Original:</strong> R$ {round.originalPrice.toFixed(2)}</p>
+                            <p><strong>Preço Final:</strong> R$ {round.totalPrice.toFixed(2)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </CardContent>

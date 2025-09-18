@@ -146,8 +146,31 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
     currentRound: 0
   });
 
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [viewMode, setViewMode] = useState<'search' | 'create' | 'edit'>('search');
+  const [proposals, setProposals] = useState<Proposal[]>([
+    {
+      id: 'vm_1',
+      proposalNumber: 'VM-2024-001',
+      name: 'Proposta VM Teste',
+      clientName: 'EMPRESA XYZ',
+      date: '2024-01-17',
+      vms: [],
+      totalPrice: 500.00,
+      negotiationRounds: [],
+      currentRound: 0
+    },
+    {
+      id: 'vm_2', 
+      proposalNumber: 'VM-2024-002',
+      name: 'Proposta VM Corporativa',
+      clientName: 'TECH SOLUTIONS',
+      date: '2024-01-18',
+      vms: [],
+      totalPrice: 800.00,
+      negotiationRounds: [],
+      currentRound: 0
+    }
+  ]);
+  const [viewMode, setViewMode] = useState<'search' | 'create' | 'edit' | 'proposal-summary'>('search');
   const [activeTab, setActiveTab] = useState<'config' | 'summary' | 'negotiations' | 'settings'>('config');
   const [searchTerm, setSearchTerm] = useState('');
   const [proposalSearchTerm, setProposalSearchTerm] = useState('');
@@ -157,9 +180,9 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
     vcpuPerCore: 50,
     ramPerGB: 30,
     storagePerGB: {
-      'HDD SAS': 0.3,
-      'SSD SATA': 0.8,
-      'SSD NVMe': 1.2
+      'HDD SAS': 0.30,
+      'SSD SATA': 0.80,
+      'SSD NVMe': 1.20
     },
     networkPerGbps: 20,
     osLicense: {
@@ -168,7 +191,7 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
       'FreeBSD': 0,
       'Custom': 100
     },
-    backupPerGB: 0.1,
+    backupPerGB: 0.10,
     additionalIP: 50,
     additionalSnapshot: 25,
     vpnSiteToSite: 150,
@@ -184,8 +207,8 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
     selectedTaxRegime: 'Lucro Presumido',
     storageCosts: {
       'HDD SAS': 0.15,
-      'NVMe': 0.6,
-      'SSD Performance': 0.4
+      'NVMe': 0.60,
+      'SSD Performance': 0.40
     },
     networkCosts: {
       '1 Gbps': 10,
@@ -201,6 +224,11 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
     setupFee: 500,
     managementSupport: 200
   });
+
+  // Função para formatar valores em padrão brasileiro
+  const formatCurrency = (value: number): string => {
+    return `R$ ${value.toFixed(2).replace('.', ',')}`;
+  };
 
   // Função para gerar número da proposta automaticamente
   const generateProposalNumber = (): string => {
@@ -258,10 +286,109 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
     setActiveTab('config');
   };
 
+  const viewProposal = (proposal: Proposal) => {
+    setCurrentProposal(proposal);
+    setViewMode('proposal-summary');
+  };
+
   const editProposal = (proposal: Proposal) => {
     setCurrentProposal(proposal);
     setViewMode('edit');
     setActiveTab('config');
+  };
+
+  const handlePrint = () => {
+    // Add print-specific styles
+    const printStyles = `
+        @media print {
+            @page {
+                size: A4;
+                margin: 1cm;
+            }
+            
+            body * {
+                visibility: hidden;
+            }
+            
+            .print-area, .print-area * {
+                visibility: visible;
+            }
+            
+            .print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white !important;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            .print\\:block {
+                display: block !important;
+            }
+            
+            .print\\:hidden {
+                display: none !important;
+            }
+            
+            .print\\:pt-2 {
+                padding-top: 0.5rem !important;
+            }
+            
+            .print\\:gap-4 {
+                gap: 1rem !important;
+            }
+            
+            .print\\:space-y-4 > * + * {
+                margin-top: 1rem !important;
+            }
+            
+            .print\\:text-sm {
+                font-size: 0.875rem !important;
+            }
+            
+            table {
+                page-break-inside: avoid;
+            }
+            
+            .border, .border-t {
+                border-color: #000 !important;
+            }
+            
+            .text-gray-900 {
+                color: #000 !important;
+            }
+            
+            .bg-slate-50 {
+                background-color: #f8fafc !important;
+            }
+        }
+    `;
+    
+    // Create style element
+    const styleElement = document.createElement('style');
+    styleElement.textContent = printStyles;
+    document.head.appendChild(styleElement);
+    
+    // Add print-area class to the proposal view
+    const proposalElement = document.querySelector('.proposal-view');
+    if (proposalElement) {
+        proposalElement.classList.add('print-area');
+    }
+    
+    // Trigger print
+    window.print();
+    
+    // Clean up
+    setTimeout(() => {
+        document.head.removeChild(styleElement);
+        if (proposalElement) {
+            proposalElement.classList.remove('print-area');
+        }
+    }, 1000);
   };
 
   const cancelAction = () => {
@@ -435,28 +562,35 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                             <td className="py-3 px-4 text-white">{proposal.proposalNumber}</td>
                             <td className="py-3 px-4 text-white">{proposal.clientName}</td>
                             <td className="py-3 px-4 text-slate-300">
-                              {new Date(proposal.date).toLocaleDateString('pt-BR')}
+                              {proposal.date ? (isNaN(new Date(proposal.date).getTime()) ? 'N/A' : new Date(proposal.date).toLocaleDateString('pt-BR')) : 'N/A'}
                             </td>
                             <td className="py-3 px-4 text-green-400 font-semibold">
-                              R$ {proposal.totalPrice.toFixed(2)}
+                              {formatCurrency(proposal.totalPrice)}
                             </td>
                             <td className="py-3 px-4">
                               <div className="flex gap-2">
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => editProposal(proposal)}
-                                  className="border-slate-600 text-white hover:bg-slate-600"
+                                  onClick={() => viewProposal(proposal)}
+                                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
                                 >
-                                  <Edit className="h-4 w-4" />
+                                  <Eye className="h-4 w-4 mr-2" /> Visualizar
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => deleteProposal(proposal.id)}
-                                  className="border-red-600 text-red-400 hover:bg-red-600 hover:text-white"
+                                  onClick={() => editProposal(proposal)}
+                                  className="border-blue-600 text-blue-300 hover:bg-blue-700"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Edit className="h-4 w-4 mr-2" /> Editar
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => deleteProposal(proposal.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" /> Excluir
                                 </Button>
                               </div>
                             </td>
@@ -470,6 +604,113 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                     <FileText className="h-12 w-12 mx-auto mb-4 text-slate-400" />
                     <h3 className="text-lg font-semibold text-white mb-2">Nenhuma proposta encontrada</h3>
                     <p className="text-slate-400">Clique em "Nova Proposta" para começar.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Proposal Summary View */}
+        {viewMode === 'proposal-summary' && currentProposal && (
+          <div className="container mx-auto p-4">
+            <Card className="bg-white border-gray-300 text-black print:shadow-none proposal-view">
+              <CardHeader className="print:pb-2">
+                <div className="flex justify-between items-start mb-4 print:mb-2">
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Proposta Comercial</h1>
+                    <p className="text-gray-600">Máquinas Virtuais</p>
+                  </div>
+                  <div className="flex gap-2 no-print">
+                    <Button variant="outline" onClick={() => setViewMode('search')}>
+                      <ArrowLeft className="h-4 w-4 mr-2" />Voltar
+                    </Button>
+                    <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700">
+                      <Download className="h-4 w-4 mr-2" />Imprimir PDF
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6 print:space-y-4">
+                {/* Dados da Proposta */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Dados da Proposta</h3>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Número:</strong> {currentProposal.proposalNumber}</p>
+                      <p><strong>Nome:</strong> {currentProposal.name}</p>
+                      <p><strong>Cliente:</strong> {currentProposal.clientName}</p>
+                      <p><strong>Data:</strong> {currentProposal.date ? (isNaN(new Date(currentProposal.date).getTime()) ? 'N/A' : new Date(currentProposal.date).toLocaleDateString('pt-BR')) : 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Resumo Financeiro</h3>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Total da Proposta:</strong> {formatCurrency(currentProposal.totalPrice)}</p>
+                      <p><strong>Rodada Atual:</strong> {currentProposal.currentRound}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Máquinas Virtuais */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Máquinas Virtuais</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse border border-gray-300">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="border border-gray-300 px-4 py-2 text-left">Nome</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">vCPU</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">RAM (GB)</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">Storage</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">OS</th>
+                          <th className="border border-gray-300 px-4 py-2 text-left">Qtd</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentProposal.vms.map((vm, index) => (
+                          <tr key={index}>
+                            <td className="border border-gray-300 px-4 py-2">{vm.name}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.vcpu}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.ram}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.storageSize}GB {vm.storageType}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.os}</td>
+                            <td className="border border-gray-300 px-4 py-2">{vm.quantity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Rodadas de Negociação */}
+                {currentProposal.negotiationRounds.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Histórico de Negociações</h3>
+                    <div className="space-y-3">
+                      {currentProposal.negotiationRounds.map((round, index) => (
+                        <div key={index} className="border border-gray-300 p-3 rounded">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-semibold">Rodada {round.roundNumber}</h4>
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              round.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                              round.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {round.status === 'accepted' ? 'Aceito' : 
+                               round.status === 'rejected' ? 'Rejeitado' : 'Ativo'}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">{round.description}</p>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <p><strong>Data:</strong> {round.date ? (isNaN(new Date(round.date).getTime()) ? 'N/A' : new Date(round.date).toLocaleDateString('pt-BR')) : 'N/A'}</p>
+                            <p><strong>Desconto:</strong> {round.discount}%</p>
+                            <p><strong>Preço Original:</strong> {formatCurrency(round.originalPrice)}</p>
+                            <p><strong>Preço Final:</strong> {formatCurrency(round.totalPrice)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -642,10 +883,10 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                         </div>
                         <div className="mt-3 pt-3 border-t border-slate-600">
                           <div className="font-medium text-green-400">
-                            R$ {calculateVMPrice(vm).toFixed(2)}/mês por VM
+                            {formatCurrency(calculateVMPrice(vm))}/mês por VM
                           </div>
                           <div className="text-sm text-slate-400">
-                            Total: R$ {(calculateVMPrice(vm) * vm.quantity).toFixed(2)}/mês
+                            Total: {formatCurrency(calculateVMPrice(vm) * vm.quantity)}/mês
                           </div>
                         </div>
                       </div>
@@ -664,7 +905,7 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                 <div className="bg-blue-600 p-4 rounded-lg">
                   <div className="text-center">
                     <div className="text-3xl font-bold text-white">
-                      R$ {calculateTotalPrice.toFixed(2)}
+                      {formatCurrency(calculateTotalPrice)}
                     </div>
                     <div className="text-sm text-blue-100">Total Mensal</div>
                   </div>
@@ -673,7 +914,7 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                 <div className="space-y-2 text-slate-300">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span>R$ {calculateTotalPrice.toFixed(2)}</span>
+                    <span>{formatCurrency(calculateTotalPrice)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Desconto (0%):</span>
@@ -682,7 +923,7 @@ const VMCalculator: React.FC<VMCalculatorProps> = ({ onSave, onCancel, proposalT
                   <Separator className="bg-slate-600" />
                   <div className="flex justify-between font-bold text-white">
                     <span>Total:</span>
-                    <span>R$ {calculateTotalPrice.toFixed(2)}</span>
+                    <span>{formatCurrency(calculateTotalPrice)}</span>
                   </div>
                 </div>
 

@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 // Interfaces
 export interface ClientData {
     name: string;
+    contact: string;
+    projectName: string;
     email: string;
     phone: string;
 }
@@ -71,6 +73,26 @@ export function ClientManagerForm({
                                 className="bg-slate-800 border-slate-700 text-white"
                                 placeholder="Nome completo do cliente"
                                 required
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="client-contact">Contato do Cliente</Label>
+                            <Input
+                                id="client-contact"
+                                value={clientData.contact}
+                                onChange={(e) => onClientDataChange({ ...clientData, contact: e.target.value })}
+                                className="bg-slate-800 border-slate-700 text-white"
+                                placeholder="Contato do cliente"
+                            />
+                        </div>
+                        <div>
+                            <Label htmlFor="project-name">Nome do Projeto</Label>
+                            <Input
+                                id="project-name"
+                                value={clientData.projectName}
+                                onChange={(e) => onClientDataChange({ ...clientData, projectName: e.target.value })}
+                                className="bg-slate-800 border-slate-700 text-white"
+                                placeholder="Nome do projeto"
                             />
                         </div>
                         <div>

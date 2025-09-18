@@ -15,17 +15,17 @@ export function ClientManagerInfo({ clientData, accountManagerData }: ClientMana
             <Card className="bg-slate-900/50 border-slate-800">
                 <CardContent className="p-4">
                     <h3 className="font-semibold text-white mb-2">Cliente</h3>
-                    <p className="text-slate-300 text-sm">{clientData.name}</p>
-                    <p className="text-slate-400 text-xs">{clientData.email}</p>
-                    {clientData.phone && <p className="text-slate-400 text-xs">{clientData.phone}</p>}
+                    <p className="text-slate-300 text-sm">{clientData?.name || 'N/A'}</p>
+                    <p className="text-slate-400 text-xs">{clientData?.email || 'N/A'}</p>
+                    {clientData?.phone && <p className="text-slate-400 text-xs">{clientData.phone}</p>}
                 </CardContent>
             </Card>
             <Card className="bg-slate-900/50 border-slate-800">
                 <CardContent className="p-4">
                     <h3 className="font-semibold text-white mb-2">Gerente de Contas</h3>
-                    <p className="text-slate-300 text-sm">{accountManagerData.name}</p>
-                    <p className="text-slate-400 text-xs">{accountManagerData.email}</p>
-                    {accountManagerData.phone && <p className="text-slate-400 text-xs">{accountManagerData.phone}</p>}
+                    <p className="text-slate-300 text-sm">{accountManagerData?.name || 'N/A'}</p>
+                    <p className="text-slate-400 text-xs">{accountManagerData?.email || 'N/A'}</p>
+                    {accountManagerData?.phone && <p className="text-slate-400 text-xs">{accountManagerData.phone}</p>}
                 </CardContent>
             </Card>
         </div>

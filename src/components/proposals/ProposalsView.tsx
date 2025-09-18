@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Edit, Trash2, PlusCircle, FileDown, User, Calendar, DollarSign, FileText, Briefcase } from 'lucide-react';
+import { Edit, Trash2, PlusCircle, FileDown, User, Calendar, DollarSign, FileText, Briefcase, Calculator, ArrowLeft } from 'lucide-react';
 import type { Proposal, Partner } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,27 +12,36 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import ProposalForm from './ProposalForm';
 import CommercialProposalView from '../commercial-proposal/CommercialProposalView';
+import { useAuth } from '@/hooks/use-auth';
 
 interface ProposalsViewProps {
   proposals: Proposal[];
   partners: Partner[];
   onSave: (proposal: Proposal) => void;
   onDelete: (id: string) => void;
+  onBackToTop?: () => void;
 }
 
-const ProposalsView: React.FC<ProposalsViewProps> = ({ proposals, partners, onSave, onDelete }) => {
+const ProposalsView: React.FC<ProposalsViewProps> = ({ proposals, partners, onSave, onDelete, onBackToTop }) => {
   const router = useRouter();
+  const { user } = useAuth(); // Get the user object
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProposal, setEditingProposal] = useState<Proposal | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showProposalTypeDialog, setShowProposalTypeDialog] = useState(false);
   const [showCommercialProposal, setShowCommercialProposal] = useState(false);
 
-  const filteredProposals = proposals.filter(proposal =>
-    proposal.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    proposal.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    proposal.accountManager.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProposals = proposals.filter(proposal => {
+    if (!proposal) return false; // Defensively handle null/undefined proposals in the array
+    const term = searchTerm.toLowerCase();
+
+    const titleMatch = typeof proposal.title === 'string' && proposal.title.toLowerCase().includes(term);
+    const clientMatch = typeof proposal.client === 'string' && proposal.client.toLowerCase().includes(term);
+    const accountManagerMatch = typeof proposal.accountManager === 'string' && proposal.accountManager.toLowerCase().includes(term);
+
+    const isMatch = titleMatch || clientMatch || accountManagerMatch;
+    return isMatch;
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -95,16 +104,44 @@ const ProposalsView: React.FC<ProposalsViewProps> = ({ proposals, partners, onSa
     return distributor?.name || 'N/A';
   };
 
+  const handleNavigateToCalculator = (proposal: Proposal) => {
+    const baseId = proposal.baseId || '';
+    let tab = 'dashboard';
+    
+    if (baseId.startsWith('Prop_PABX_')) tab = 'calculator-pabx-sip';
+    else if (baseId.startsWith('Prop_MV_')) tab = 'calculator-maquinas-virtuais';
+    else if (baseId.startsWith('Prop_IR_')) tab = 'calculator-radio-internet';
+    else if (baseId.startsWith('Prop_IF_')) tab = 'calculator-internet-fibra';
+    else if (baseId.startsWith('Prop_DFR_')) tab = 'calculator-double-fibra-radio';
+    else if (baseId.startsWith('Prop_IM_')) tab = 'calculator-internet-man';
+    
+    // Use router.push to navigate to the correct tab
+    router.push(`/?tab=${tab}`, { scroll: false });
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Propostas</h1>
-          <p className="text-muted-foreground">
-            Gerencie suas propostas comerciais
-          </p>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="flex items-center space-x-4">
+          {onBackToTop && (
+            <Button 
+              variant="outline" 
+              onClick={onBackToTop}
+              className="flex items-center shrink-0"
+              aria-label="Voltar para as calculadoras"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Voltar</span>
+            </Button>
+          )}
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Propostas</h1>
+            <p className="text-muted-foreground">
+              Gerencie suas propostas comerciais
+            </p>
+          </div>
         </div>
-        <Button onClick={handleCreate}>
+        <Button onClick={handleCreate} className="shrink-0">
           <PlusCircle className="h-4 w-4 mr-2" />
           Nova Proposta
         </Button>
@@ -206,17 +243,30 @@ const ProposalsView: React.FC<ProposalsViewProps> = ({ proposals, partners, onSa
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleEdit(proposal)}
+                        onClick={() => handleNavigateToCalculator(proposal)}
+                        className="flex items-center"
                       >
-                        <Edit className="h-4 w-4" />
+                        <Calculator className="h-4 w-4 mr-1" />
+                        <span>Calcular</span>
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDelete(proposal.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {(user?.role === 'admin' || proposal.createdBy === user?.uid) && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(proposal)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onDelete(proposal.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

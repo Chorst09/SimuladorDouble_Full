@@ -16,7 +16,7 @@ interface VMProposal {
 }
 
 const VMProposals: React.FC = () => {
-    const [viewMode, setViewMode] = useState<'search' | 'create' | 'edit'>('search');
+    const [viewMode, setViewMode] = useState<'search' | 'create' | 'edit' | 'view'>('search');
     const [proposals, setProposals] = useState<VMProposal[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [editingProposal, setEditingProposal] = useState<VMProposal | null>(null);
@@ -36,6 +36,11 @@ const VMProposals: React.FC = () => {
     const handleCreateNew = () => {
         setEditingProposal(null);
         setViewMode('create');
+    };
+
+    const handleView = (proposal: VMProposal) => {
+        setEditingProposal(proposal);
+        setViewMode('view');
     };
 
     const handleEdit = (proposal: VMProposal) => {
@@ -122,12 +127,20 @@ const VMProposals: React.FC = () => {
                                     <TableCell>{p.date}</TableCell>
                                     <TableCell>{`R$ ${p.totalMonthly.toFixed(2)}`}</TableCell>
                                     <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" onClick={() => handleEdit(p)}>
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => handleDelete(p.id)}>
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
+                                        <div className="flex gap-2 justify-end">
+                                            <Button variant="outline" size="sm" onClick={() => handleView(p)}>
+                                                <Edit className="h-4 w-4 mr-2" />
+                                                Visualizar
+                                            </Button>
+                                            <Button variant="outline" size="sm" onClick={() => handleEdit(p)} className="border-blue-600 text-blue-600 hover:bg-blue-50">
+                                                <Edit className="h-4 w-4 mr-2" />
+                                                Editar
+                                            </Button>
+                                            <Button variant="destructive" size="sm" onClick={() => handleDelete(p.id)}>
+                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                Excluir
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))

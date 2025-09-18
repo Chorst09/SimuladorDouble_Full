@@ -1,3 +1,29 @@
+export interface Proposal {
+  id: string; // Unique ID for each version, e.g., Prop_MV_0001/2025_v1
+  baseId: string; // Base ID, e.g., Prop_MV_0001/2025
+  version: number;
+  title: string;
+  client: string;
+  type: string; // Proposal type: RADIO, FIBER, VM, etc.
+  value: number;
+  status: 'Rascunho' | 'Enviada' | 'Em Análise' | 'Aprovada' | 'Rejeitada' | 'Aguardando aprovação desconto Diretoria' | 'Aguardando Aprovação do Cliente' | 'Fechado Ganho' | 'Perdido';
+  createdBy: string; // User ID
+  accountManager: string; // User name
+  createdAt: any; // Firestore Timestamp
+  distributorId: string;
+  date: string;
+  expiryDate: string;
+}
+
+export type UserRole = 'admin' | 'diretor' | 'usuario';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name?: string;
+  role: UserRole;
+}
+
 export interface Partner {
   id: number;
   name: string;
@@ -118,4 +144,51 @@ export interface DocumentRequirement {
   mandatory: boolean;
   deadline?: string;
   notes?: string;
+}
+
+// Enhanced Error Response Interfaces for Proposals API
+export type ProposalApiErrorCode = 
+  | 'INDEX_MISSING' 
+  | 'PERMISSION_DENIED' 
+  | 'QUOTA_EXCEEDED' 
+  | 'VALIDATION_ERROR'
+  | 'DATABASE_CONNECTION_ERROR'
+  | 'AUTHENTICATION_REQUIRED'
+  | 'UNKNOWN_ERROR';
+
+export interface ProposalApiErrorDetails {
+  indexUrl?: string;
+  requiredFields?: string[];
+  fallbackAvailable?: boolean;
+  validationErrors?: string[];
+  retryAfter?: number;
+  supportContact?: string;
+  documentationUrl?: string;
+  requiredIndexDefinition?: string;
+}
+
+export interface ProposalApiError {
+  error: string;
+  message: string;
+  code: ProposalApiErrorCode;
+  timestamp: string;
+  requestId?: string;
+  details?: ProposalApiErrorDetails;
+}
+
+export interface IndexErrorInfo {
+  isIndexError: boolean;
+  missingFields?: string[];
+  collection?: string;
+  indexUrl?: string;
+  fallbackStrategy: 'UNORDERED_QUERY' | 'CLIENT_SORT' | 'SIMPLIFIED_QUERY' | 'NONE';
+  requiredIndexDefinition?: string;
+}
+
+export interface QueryFallbackResult {
+  snapshot: any;
+  usedFallback: boolean;
+  fallbackType?: string;
+  performanceImpact?: 'LOW' | 'MEDIUM' | 'HIGH';
+  recommendedAction?: string;
 }

@@ -20,8 +20,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 const DashboardView = lazy(() => import('@/components/dashboard/DashboardView'));
 const PABXSIPCalculator = lazy(() => import('@/components/calculators/PABXSIPCalculator'));
 const MaquinasVirtuaisCalculator = lazy(() => import('@/components/calculators/MaquinasVirtuaisCalculator'));
-const FiberLinkCalculator = lazy(() => import('@/components/calculators/FiberLinkCalculator'));
 const RadioInternetCalculator = lazy(() => import('@/components/calculators/RadioInternetCalculator'));
+const InternetFibraCalculator = lazy(() => import('@/components/calculators/InternetFibraCalculator'));
+const DoubleFibraRadioCalculator = lazy(() => import('@/components/calculators/DoubleFibraRadioCalculator'));
+const InternetManCalculator = lazy(() => import('@/components/calculators/InternetManCalculator'));
+const PhysicalVirtualConversion = lazy(() => import('@/components/tools/PhysicalVirtualConversion'));
 const UserManagement = lazy(() => import('@/components/admin/UserManagement'));
 const AdminSetup = lazy(() => import('@/components/admin/AdminSetup'));
 
@@ -70,8 +73,10 @@ export default function App() {
             subItems: [
                 { id: 'calculator-pabx-sip', label: 'PABX/SIP', icon: <Phone className="h-4 w-4" /> },
                 { id: 'calculator-maquinas-virtuais', label: 'Máquinas Virtuais', icon: <Server className="h-4 w-4" /> },
-                { id: 'calculator-fiber-link', label: 'Fiber Link', icon: <Wifi className="h-4 w-4" /> },
-                { id: 'calculator-radio-internet', label: 'Rádio Internet', icon: <Radio className="h-4 w-4" /> }
+                { id: 'calculator-radio-internet', label: 'Internet Rádio', icon: <Radio className="h-4 w-4" /> },
+                { id: 'calculator-internet-fibra', label: 'Internet Fibra', icon: <Wifi className="h-4 w-4" /> },
+                { id: 'calculator-double-fibra-radio', label: 'Double-Fibra/Radio', icon: <Radio className="h-4 w-4" /> },
+                { id: 'calculator-internet-man', label: 'Internet MAN', icon: <Radio className="h-4 w-4" /> }
             ]
         },
         {
@@ -79,9 +84,10 @@ export default function App() {
             label: 'Ferramentas',
             icon: <CheckSquare className="h-4 w-4" />,
             subItems: [
+                { id: 'physical-virtual-conversion', label: 'Conversão Física/Virtual', icon: <Server className="h-4 w-4" /> },
                 { id: 'site-survey', label: 'Site Survey', icon: <MapPin className="h-4 w-4" /> },
                 { id: 'it-assessment', label: 'Assessment de TI', icon: <BarChart3 className="h-4 w-4" /> },
-                { id: 'poc', label: 'Provas de Conceito (POC)', icon: <ClipboardList className="h-4 w-4" /> }
+                { id: 'poc', label:'Provas de Conceito (POC)', icon: <ClipboardList className="h-4 w-4" /> }
             ]
         },
         // Adicionar gerenciamento de usuários apenas para administradores
@@ -121,37 +127,55 @@ export default function App() {
             case 'dashboard': 
                 return (
                     <Suspense fallback={<LoadingSpinner />}>
-                        <DashboardView />
+                        <DashboardView onNavigateToCalculator={setActiveTab} />
                     </Suspense>
                 );
             case 'calculator-pabx-sip': 
                 return (
                     <Suspense fallback={<LoadingSpinner />}>
-                        <PABXSIPCalculator />
+                        <PABXSIPCalculator onBackToDashboard={() => setActiveTab('dashboard')} />
                     </Suspense>
                 );
             case 'calculator-maquinas-virtuais': 
                 return (
                     <Suspense fallback={<LoadingSpinner />}>
-                        <MaquinasVirtuaisCalculator />
-                    </Suspense>
-                );
-            case 'calculator-fiber-link': 
-                return (
-                    <Suspense fallback={<LoadingSpinner />}>
-                        <FiberLinkCalculator />
+                        <MaquinasVirtuaisCalculator onBackToDashboard={() => setActiveTab('dashboard')} />
                     </Suspense>
                 );
             case 'calculator-radio-internet': 
                 return (
                     <Suspense fallback={<LoadingSpinner />}>
-                        <RadioInternetCalculator />
+                        <RadioInternetCalculator onBackToDashboard={() => setActiveTab('dashboard')} />
+                    </Suspense>
+                );
+            case 'calculator-internet-fibra':
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <InternetFibraCalculator onBackToDashboard={() => setActiveTab('dashboard')} />
+                    </Suspense>
+                );
+            case 'calculator-double-fibra-radio':
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <DoubleFibraRadioCalculator onBackToDashboard={() => setActiveTab('dashboard')} />
+                    </Suspense>
+                );
+            case 'calculator-internet-man':
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <InternetManCalculator onBackToDashboard={() => setActiveTab('dashboard')} />
                     </Suspense>
                 );
             case 'user-management':
                 return (
                     <Suspense fallback={<LoadingSpinner />}>
                         <UserManagement />
+                    </Suspense>
+                );
+            case 'physical-virtual-conversion':
+                return (
+                    <Suspense fallback={<LoadingSpinner />}>
+                        <PhysicalVirtualConversion />
                     </Suspense>
                 );
             case 'site-survey':

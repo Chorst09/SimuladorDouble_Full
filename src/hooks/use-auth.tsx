@@ -10,7 +10,7 @@ import { app } from '@/lib/firebase';
 interface User {
   uid: string;
   email: string | null;
-  role: 'admin' | 'user';
+  role: 'admin' | 'diretor' | 'user';
 }
 
 // Define o tipo para o contexto de autenticação
@@ -36,62 +36,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const db = getFirestore(app);
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      try {
-        if (firebaseUser) {
-          // Usuário logado, busca o perfil no Firestore
-          // Busca por email já que o documento pode ter sido criado com addDoc
-          const usersCollection = collection(db, 'users');
-          const q = query(usersCollection, where('email', '==', firebaseUser.email));
-          const querySnapshot = await getDocs(q);
+      if (firebaseUser) {
+        try {
+          // Check if user has role in Firestore
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          let role: 'admin' | 'diretor' | 'user' = 'user';
 
-          if (!querySnapshot.empty) {
-            const userData = querySnapshot.docs[0].data();
-            console.log('User data found:', userData); // Debug log
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              role: userData.role || 'user', // Padrão para 'user' se não houver role
-            });
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            role = userData.role || 'user';
           } else {
-            // Documento do usuário não encontrado, criar um padrão
-            console.log('User document not found, creating default user'); // Debug log
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              role: 'user',
-            });
+            // If no user document exists, check if user is admin by email
+            if (firebaseUser.email === 'admin@example.com' || firebaseUser.email === 'carlos.horst@doubletelecom.com.br') {
+              role = 'admin';
+            }
           }
-        } else {
-          // Usuário deslogado
-          setUser(null);
-        }
-      } catch (error) {
-        console.error('Erro ao buscar dados do usuário:', error);
-        // Em caso de erro, ainda define o usuário básico se autenticado
-        if (firebaseUser) {
+
           setUser({
             uid: firebaseUser.uid,
             email: firebaseUser.email,
-            role: 'user',
+            role: role
           });
-        } else {
-          setUser(null);
+        } catch (error) {
+          console.error('Error fetching user role:', error);
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            role: 'user'
+          });
         }
-      } finally {
-        setLoading(false);
+      } else {
+        setUser(null);
       }
+      setLoading(false);
     });
 
-    // Limpa a inscrição ao desmontar
     return () => unsubscribe();
   }, []);
 
   const logout = async () => {
-    if (!app) {
-      return;
-    }
-    const auth = getAuth(app);
-    await signOut(auth);
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user_data');
+    setUser(null);
   };
 
   return (

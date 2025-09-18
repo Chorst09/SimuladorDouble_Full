@@ -9,12 +9,16 @@ import {
   updateDoc, 
   deleteDoc, 
   addDoc,
-  getFirestore 
+  getFirestore,
+  query,
+  where,
+  serverTimestamp
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword, 
   getAuth, 
-  deleteUser 
+  deleteUser,
+  fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { app } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -57,7 +61,7 @@ import {
 interface User {
   id: string;
   email: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'diretor' | 'user';
   name?: string;
   createdAt?: any;
 }
@@ -75,7 +79,8 @@ export default function UserManagement() {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserName, setNewUserName] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'admin' | 'user'>('user');
+  const [newUserRole, setNewUserRole] = useState<'admin' | 'diretor' | 'user'>('user');
+  const [addUserError, setAddUserError] = useState<string | null>(null);
 
   // Check if current user is admin
   const isAdmin = currentUser?.role === 'admin';
@@ -100,11 +105,12 @@ export default function UserManagement() {
       });
       
       setUsers(usersList);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao carregar usuários:', error);
+      const description = error?.message || 'Não foi possível carregar os usuários.';
       toast({
         title: 'Erro',
-        description: 'Não foi possível carregar os usuários.',
+        description,
         variant: 'destructive'
       });
     } finally {
@@ -113,6 +119,7 @@ export default function UserManagement() {
   };
 
   const handleAddUser = async () => {
+    setAddUserError(null);
     if (!app || !newUserEmail || !newUserPassword) {
       toast({
         title: 'Erro',
@@ -125,26 +132,56 @@ export default function UserManagement() {
     try {
       const auth = getAuth(app);
       const db = getFirestore(app);
-      
-      // Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(
-        auth, 
-        newUserEmail, 
-        newUserPassword
-      );
-      
-      // Create user document in Firestore
-      await addDoc(collection(db, 'users'), {
-        email: newUserEmail,
-        name: newUserName || '',
-        role: newUserRole,
-        createdAt: new Date()
-      });
 
-      toast({
-        title: 'Sucesso',
-        description: 'Usuário criado com sucesso!'
-      });
+      // Verifica se já existe usuário com este email no Auth
+      const methods = await fetchSignInMethodsForEmail(auth, newUserEmail);
+
+      if (methods && methods.length > 0) {
+        // Usuário já existe no Auth. Apenas cria/atualiza o documento no Firestore.
+        const usersCol = collection(db, 'users');
+        const q = query(usersCol, where('email', '==', newUserEmail));
+        const snap = await getDocs(q);
+
+        if (!snap.empty) {
+          // Atualiza primeiro documento encontrado
+          const existingRef = doc(db, 'users', snap.docs[0].id);
+          await updateDoc(existingRef, {
+            name: newUserName || snap.docs[0].data().name || '',
+            role: newUserRole,
+          });
+        } else {
+          // Cria doc caso não exista
+          await addDoc(usersCol, {
+            email: newUserEmail,
+            name: newUserName || '',
+            role: newUserRole,
+            createdAt: serverTimestamp()
+          });
+        }
+
+        setAddUserError && setAddUserError(null);
+        toast({
+          title: 'Usuário já existente',
+          description: 'Email já cadastrado no Auth. Cadastro no sistema foi sincronizado/atualizado com sucesso.'
+        });
+      } else {
+        // Cria usuário no Auth
+        await createUserWithEmailAndPassword(auth, newUserEmail, newUserPassword);
+
+        // E cria documento no Firestore
+        await addDoc(collection(db, 'users'), {
+          email: newUserEmail,
+          name: newUserName || '',
+          role: newUserRole,
+          createdAt: serverTimestamp()
+        });
+
+        setAddUserError && setAddUserError(null);
+        toast({
+          title: 'Sucesso',
+          description: 'Usuário criado com sucesso!'
+        });
+      }
 
       // Reset form
       setNewUserEmail('');
@@ -152,14 +189,65 @@ export default function UserManagement() {
       setNewUserName('');
       setNewUserRole('user');
       setIsAddDialogOpen(false);
-      
+
       // Reload users
       loadUsers();
     } catch (error: any) {
       console.error('Erro ao criar usuário:', error);
+
+      // Se falhar com email já em uso, ainda assim sincroniza Firestore e trata como sucesso
+      if (error?.code === 'auth/email-already-in-use' && app) {
+        try {
+          const db = getFirestore(app);
+          const usersCol = collection(db, 'users');
+          const q = query(usersCol, where('email', '==', newUserEmail));
+          const snap = await getDocs(q);
+
+          if (!snap.empty) {
+            const existingRef = doc(db, 'users', snap.docs[0].id);
+            await updateDoc(existingRef, {
+              name: newUserName || snap.docs[0].data().name || '',
+              role: newUserRole,
+            });
+          } else {
+            await addDoc(usersCol, {
+              email: newUserEmail,
+              name: newUserName || '',
+              role: newUserRole,
+              createdAt: serverTimestamp()
+            });
+          }
+
+          setAddUserError && setAddUserError(null);
+          toast({
+            title: 'Usuário já existente',
+            description: 'Email já cadastrado no Auth. Cadastro no sistema foi sincronizado/atualizado com sucesso.'
+          });
+
+          // Reset form e recarrega lista
+          setNewUserEmail('');
+          setNewUserPassword('');
+          setNewUserName('');
+          setNewUserRole('user');
+          setIsAddDialogOpen(false);
+          loadUsers();
+          return;
+        } catch (syncErr) {
+          console.error('Falha ao sincronizar usuário existente:', syncErr);
+        }
+      }
+
+      let description = 'Não foi possível criar o usuário.';
+      if (error?.code === 'auth/email-already-in-use') {
+        description = 'Este email já está em uso. Tente usar outro email.';
+      } else if (error?.code === 'auth/invalid-email') {
+        description = 'Email inválido. Verifique e tente novamente.';
+      } else if (error?.code === 'auth/weak-password') {
+        description = 'Senha fraca. Use uma senha com pelo menos 6 caracteres.';
+      }
       toast({
         title: 'Erro',
-        description: error.message || 'Não foi possível criar o usuário.',
+        description,
         variant: 'destructive'
       });
     }
@@ -185,11 +273,12 @@ export default function UserManagement() {
       setIsEditDialogOpen(false);
       setEditingUser(null);
       loadUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao atualizar usuário:', error);
+      const description = error?.message || 'Não foi possível atualizar o usuário.';
       toast({
         title: 'Erro',
-        description: 'Não foi possível atualizar o usuário.',
+        description,
         variant: 'destructive'
       });
     }
@@ -214,11 +303,12 @@ export default function UserManagement() {
       });
 
       loadUsers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao excluir usuário:', error);
+      const description = error?.message || 'Não foi possível excluir o usuário.';
       toast({
         title: 'Erro',
-        description: 'Não foi possível excluir o usuário.',
+        description,
         variant: 'destructive'
       });
     }
@@ -269,6 +359,12 @@ export default function UserManagement() {
               <DialogTitle>Adicionar Novo Usuário</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {addUserError && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                  <strong className="font-bold">Erro!</strong>
+                  <span className="block sm:inline"> {addUserError}</span>
+                </div>
+              )}
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -300,12 +396,13 @@ export default function UserManagement() {
               </div>
               <div>
                 <Label htmlFor="role">Função</Label>
-                <Select value={newUserRole} onValueChange={(value: 'admin' | 'user') => setNewUserRole(value)}>
+                <Select value={newUserRole} onValueChange={(value: 'admin' | 'diretor' | 'user') => setNewUserRole(value)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="user">Usuário</SelectItem>
+                    <SelectItem value="diretor">Diretor</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
                   </SelectContent>
                 </Select>
@@ -353,7 +450,7 @@ export default function UserManagement() {
                       ) : (
                         <User className="h-4 w-4 mr-1 text-blue-500" />
                       )}
-                      {user.role === 'admin' ? 'Administrador' : 'Usuário'}
+                      {user.role === 'admin' ? 'Administrador' : user.role === 'diretor' ? 'Diretor' : 'Usuário'}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -425,7 +522,7 @@ export default function UserManagement() {
                 <Label htmlFor="edit-role">Função</Label>
                 <Select 
                   value={editingUser.role} 
-                  onValueChange={(value: 'admin' | 'user') => 
+                  onValueChange={(value: 'admin' | 'diretor' | 'user') => 
                     setEditingUser({...editingUser, role: value})
                   }
                 >
@@ -434,6 +531,7 @@ export default function UserManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="user">Usuário</SelectItem>
+                    <SelectItem value="diretor">Diretor</SelectItem>
                     <SelectItem value="admin">Administrador</SelectItem>
                   </SelectContent>
                 </Select>
