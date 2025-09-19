@@ -1,7 +1,7 @@
 // src/app/layout.tsx
 import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
-import { AuthProvider } from '@/hooks/use-auth';
+import { AuthProvider } from '@/hooks/use-auth-simple';
 import { Toaster } from "@/components/ui/toaster";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

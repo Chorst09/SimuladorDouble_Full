@@ -1,7 +1,7 @@
 // src/components/debug/AuthDebug.tsx
 'use client';
 
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/use-auth-simple';
 import { useEffect, useState } from 'react';
 
 export default function AuthDebug() {

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/use-auth-simple';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import AuthDebug from '@/components/debug/AuthDebug';
 
