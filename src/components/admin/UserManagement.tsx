@@ -74,19 +74,17 @@ export default function UserManagement() {
   }, [isAdmin]);
 
   const loadUsers = async () => {
-    if (!app) return;
-    
     try {
-      const db = getFirestore(app);
-      const usersCollection = collection(db, 'users');
-      const snapshot = await getDocs(usersCollection);
+      const { data: usersData, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
       
-      const usersList: User[] = [];
-      snapshot.forEach((doc) => {
-        usersList.push({ id: doc.id, ...doc.data() } as User);
-      });
+      if (error) {
+        throw error;
+      }
       
-      setUsers(usersList);
+      setUsers(usersData || []);
     } catch (error: any) {
       console.error('Erro ao carregar usuários:', error);
       const description = error?.message || 'Não foi possível carregar os usuários.';
@@ -102,7 +100,7 @@ export default function UserManagement() {
 
   const handleAddUser = async () => {
     setAddUserError(null);
-    if (!app || !newUserEmail || !newUserPassword) {
+    if (!newUserEmail || !newUserPassword) {
       toast({
         title: 'Erro',
         description: 'Email e senha são obrigatórios.',
@@ -112,57 +110,65 @@ export default function UserManagement() {
     }
 
     try {
-      const auth = getAuth(app);
-      const db = getFirestore(app);
+      // Verifica se já existe usuário com este email
+      const { data: existingUsers, error: checkError } = await supabase
+        .from('users')
+        .select('id, email')
+        .eq('email', newUserEmail)
+        .limit(1);
 
-      // Verifica se já existe usuário com este email no Auth
-      const methods = await fetchSignInMethodsForEmail(auth, newUserEmail);
+      if (checkError) {
+        console.error('Erro ao verificar usuário existente:', checkError);
+      }
 
-      if (methods && methods.length > 0) {
-        // Usuário já existe no Auth. Apenas cria/atualiza o documento no Firestore.
-        const usersCol = collection(db, 'users');
-        const q = query(usersCol, where('email', '==', newUserEmail));
-        const snap = await getDocs(q);
+      if (existingUsers && existingUsers.length > 0) {
+        // Usuário já existe, apenas atualiza
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            role: newUserRole
+          })
+          .eq('email', newUserEmail);
 
-        if (!snap.empty) {
-          // Atualiza primeiro documento encontrado
-          const existingRef = doc(db, 'users', snap.docs[0].id);
-          await updateDoc(existingRef, {
-            name: newUserName || snap.docs[0].data().name || '',
-            role: newUserRole,
-          });
-        } else {
-          // Cria doc caso não exista
-          await addDoc(usersCol, {
-            email: newUserEmail,
-            name: newUserName || '',
-            role: newUserRole,
-            createdAt: serverTimestamp()
-          });
+        if (updateError) {
+          throw updateError;
         }
 
-        setAddUserError && setAddUserError(null);
         toast({
           title: 'Usuário já existente',
-          description: 'Email já cadastrado no Auth. Cadastro no sistema foi sincronizado/atualizado com sucesso.'
+          description: 'Email já cadastrado. Role foi atualizada com sucesso.'
         });
       } else {
-        // Cria usuário no Auth
-        await createUserWithEmailAndPassword(auth, newUserEmail, newUserPassword);
-
-        // E cria documento no Firestore
-        await addDoc(collection(db, 'users'), {
+        // Cria usuário no Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email: newUserEmail,
-          name: newUserName || '',
-          role: newUserRole,
-          createdAt: serverTimestamp()
+          password: newUserPassword,
         });
 
-        setAddUserError && setAddUserError(null);
-        toast({
-          title: 'Sucesso',
-          description: 'Usuário criado com sucesso!'
-        });
+        if (authError) {
+          throw authError;
+        }
+
+        if (authData.user) {
+          // Cria documento na tabela users
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: authData.user.id,
+              email: newUserEmail,
+              role: newUserRole
+            });
+
+          if (insertError) {
+            console.error('Erro ao inserir usuário na tabela:', insertError);
+            // Don't throw here as the user was created successfully in auth
+          }
+
+          toast({
+            title: 'Sucesso',
+            description: 'Usuário criado com sucesso!'
+          });
+        }
       }
 
       // Reset form
@@ -177,56 +183,15 @@ export default function UserManagement() {
     } catch (error: any) {
       console.error('Erro ao criar usuário:', error);
 
-      // Se falhar com email já em uso, ainda assim sincroniza Firestore e trata como sucesso
-      if (error?.code === 'auth/email-already-in-use' && app) {
-        try {
-          const db = getFirestore(app);
-          const usersCol = collection(db, 'users');
-          const q = query(usersCol, where('email', '==', newUserEmail));
-          const snap = await getDocs(q);
-
-          if (!snap.empty) {
-            const existingRef = doc(db, 'users', snap.docs[0].id);
-            await updateDoc(existingRef, {
-              name: newUserName || snap.docs[0].data().name || '',
-              role: newUserRole,
-            });
-          } else {
-            await addDoc(usersCol, {
-              email: newUserEmail,
-              name: newUserName || '',
-              role: newUserRole,
-              createdAt: serverTimestamp()
-            });
-          }
-
-          setAddUserError && setAddUserError(null);
-          toast({
-            title: 'Usuário já existente',
-            description: 'Email já cadastrado no Auth. Cadastro no sistema foi sincronizado/atualizado com sucesso.'
-          });
-
-          // Reset form e recarrega lista
-          setNewUserEmail('');
-          setNewUserPassword('');
-          setNewUserName('');
-          setNewUserRole('user');
-          setIsAddDialogOpen(false);
-          loadUsers();
-          return;
-        } catch (syncErr) {
-          console.error('Falha ao sincronizar usuário existente:', syncErr);
-        }
-      }
-
       let description = 'Não foi possível criar o usuário.';
-      if (error?.code === 'auth/email-already-in-use') {
+      if (error.message.includes('User already registered')) {
         description = 'Este email já está em uso. Tente usar outro email.';
-      } else if (error?.code === 'auth/invalid-email') {
+      } else if (error.message.includes('Invalid email')) {
         description = 'Email inválido. Verifique e tente novamente.';
-      } else if (error?.code === 'auth/weak-password') {
+      } else if (error.message.includes('Password should be at least')) {
         description = 'Senha fraca. Use uma senha com pelo menos 6 caracteres.';
       }
+      
       toast({
         title: 'Erro',
         description,
@@ -236,16 +201,19 @@ export default function UserManagement() {
   };
 
   const handleEditUser = async () => {
-    if (!app || !editingUser) return;
+    if (!editingUser) return;
 
     try {
-      const db = getFirestore(app);
-      const userRef = doc(db, 'users', editingUser.id);
-      
-      await updateDoc(userRef, {
-        name: editingUser.name || '',
-        role: editingUser.role
-      });
+      const { error } = await supabase
+        .from('users')
+        .update({
+          role: editingUser.role
+        })
+        .eq('id', editingUser.id);
+
+      if (error) {
+        throw error;
+      }
 
       toast({
         title: 'Sucesso',
@@ -267,17 +235,20 @@ export default function UserManagement() {
   };
 
   const handleDeleteUser = async (userId: string, userEmail: string) => {
-    if (!app) return;
-    
     if (!confirm(`Tem certeza que deseja excluir o usuário ${userEmail}?`)) {
       return;
     }
 
     try {
-      const db = getFirestore(app);
-      
-      // Delete user document from Firestore
-      await deleteDoc(doc(db, 'users', userId));
+      // Delete user from users table
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', userId);
+
+      if (error) {
+        throw error;
+      }
 
       toast({
         title: 'Sucesso',
