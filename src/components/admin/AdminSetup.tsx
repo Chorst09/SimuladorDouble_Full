@@ -1,21 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { 
-  collection, 
-  getDocs, 
-  query, 
-  where, 
-  addDoc,
-  updateDoc,
-  doc,
-  getFirestore 
-} from 'firebase/firestore';
-import { 
-  createUserWithEmailAndPassword, 
-  getAuth 
-} from 'firebase/auth';
-import { app } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,24 +25,29 @@ export default function AdminSetup() {
   }, []);
 
   const checkForAdmin = async () => {
-    if (!app) return;
-    
     try {
-      const db = getFirestore(app);
-      const usersCollection = collection(db, 'users');
-      const adminQuery = query(usersCollection, where('role', '==', 'admin'));
-      const snapshot = await getDocs(adminQuery);
+      const { data: adminUsers, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'admin')
+        .limit(1);
       
-      setHasAdmin(!snapshot.empty);
+      if (error) {
+        console.error('Erro ao verificar administradores:', error);
+        setHasAdmin(false);
+      } else {
+        setHasAdmin(adminUsers && adminUsers.length > 0);
+      }
     } catch (error) {
       console.error('Erro ao verificar administradores:', error);
+      setHasAdmin(false);
     } finally {
       setLoading(false);
     }
   };
 
   const createFirstAdmin = async () => {
-    if (!app || !email || !password) {
+    if (!email || !password) {
       toast({
         title: 'Erro',
         description: 'Email e senha são obrigatórios.',
@@ -68,21 +59,29 @@ export default function AdminSetup() {
     setCreating(true);
 
     try {
-      const auth = getAuth(app);
-      const db = getFirestore(app);
+      // Check if user already exists in Supabase users table
+      const { data: existingUsers, error: checkError } = await supabase
+        .from('users')
+        .select('id, email')
+        .eq('email', email)
+        .limit(1);
       
-      // Check if user already exists in Firestore
-      const usersCollection = collection(db, 'users');
-      const q = query(usersCollection, where('email', '==', email));
-      const existingUsers = await getDocs(q);
+      if (checkError) {
+        console.error('Erro ao verificar usuário existente:', checkError);
+      }
       
-      if (!existingUsers.empty) {
-        // User exists in Firestore, just update to admin
-        const userDoc = existingUsers.docs[0];
-        await updateDoc(doc(db, 'users', userDoc.id), {
-          role: 'admin',
-          name: name || 'Administrador'
-        });
+      if (existingUsers && existingUsers.length > 0) {
+        // User exists in users table, just update to admin
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            role: 'admin'
+          })
+          .eq('email', email);
+        
+        if (updateError) {
+          throw updateError;
+        }
         
         toast({
           title: 'Sucesso',
@@ -98,46 +97,52 @@ export default function AdminSetup() {
         return;
       }
       
-      // Try to create user in Firebase Auth
-      try {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } catch (authError: any) {
-        if (authError.code === 'auth/email-already-in-use') {
-          // User exists in Auth but not in Firestore, create Firestore document
-          console.log('User exists in Auth, creating Firestore document');
-        } else {
-          throw authError;
-        }
-      }
-      
-      // Create admin user document in Firestore
-      await addDoc(collection(db, 'users'), {
+      // Create user with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email,
-        name: name || 'Administrador',
-        role: 'admin',
-        createdAt: new Date()
+        password: password,
       });
 
-      toast({
-        title: 'Sucesso',
-        description: 'Primeiro administrador criado com sucesso! Redirecionando para login...'
-      });
+      if (authError) {
+        throw authError;
+      }
 
-      setHasAdmin(true);
-      
-      // Redirect to login after a short delay
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 1500);
+      if (authData.user) {
+        // Create admin user document in users table
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: authData.user.id,
+            email: email,
+            role: 'admin'
+          });
+
+        if (insertError) {
+          console.error('Erro ao inserir usuário na tabela:', insertError);
+          // Don't throw here as the user was created successfully in auth
+        }
+
+        toast({
+          title: 'Sucesso',
+          description: 'Primeiro administrador criado com sucesso! Verifique seu email para confirmar a conta.'
+        });
+
+        setHasAdmin(true);
+        
+        // Redirect to login after a short delay
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1500);
+      }
     } catch (error: any) {
       console.error('Erro ao criar primeiro admin:', error);
       let errorMessage = 'Não foi possível criar o administrador.';
       
-      if (error.code === 'auth/email-already-in-use') {
+      if (error.message.includes('User already registered')) {
         errorMessage = 'Este email já está em uso. Tente fazer login ou use outro email.';
-      } else if (error.code === 'auth/weak-password') {
+      } else if (error.message.includes('Password should be at least')) {
         errorMessage = 'A senha deve ter pelo menos 6 caracteres.';
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (error.message.includes('Invalid email')) {
         errorMessage = 'Email inválido.';
       }
       

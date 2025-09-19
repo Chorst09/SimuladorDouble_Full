@@ -3,16 +3,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
-import { doc, setDoc, getFirestore } from 'firebase/firestore';
-import { app } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useAdmin } from '@/hooks/use-admin';
-import AdminSetup from '@/components/admin/AdminSetup';
 import Link from 'next/link';
 
 const SignupPage = () => {
@@ -22,53 +18,66 @@ const SignupPage = () => {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const { hasAnyAdmin, loading: adminLoading } = useAdmin();
-
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    if (!app) {
-      setError('Firebase não está configurado');
-      toast({ title: 'Erro no cadastro', description: 'Serviço indisponível.', variant: 'destructive' });
-      setLoading(false);
-      return;
-    }
-
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Adiciona o usuário ao Firestore com a role 'user'
-      await setDoc(doc(db, 'users', user.uid), {
-        email: user.email,
-        role: 'user',
+      // Create user with Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: password,
       });
 
-      toast({ title: 'Cadastro realizado com sucesso!', description: 'Você será redirecionado para o login.' });
-      router.push('/login');
+      if (error) {
+        throw error;
+      }
+
+      if (data.user) {
+        // Add user to users table with default role
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: data.user.id,
+            email: data.user.email,
+            role: 'user'
+          });
+
+        if (insertError) {
+          console.error('Error inserting user data:', insertError);
+          // Don't throw here as the user was created successfully
+        }
+
+        toast({ 
+          title: 'Cadastro realizado com sucesso!', 
+          description: 'Verifique seu email para confirmar a conta antes de fazer login.' 
+        });
+        router.push('/login');
+      }
     } catch (err: any) {
+      console.error('Signup error:', err);
       setError(err.message);
-      toast({ title: 'Erro no cadastro', description: err.message, variant: 'destructive' });
+      
+      // Provide more user-friendly error messages
+      let errorMessage = err.message;
+      if (err.message.includes('User already registered')) {
+        errorMessage = 'Este email já está cadastrado.';
+      } else if (err.message.includes('Password should be at least')) {
+        errorMessage = 'A senha deve ter pelo menos 6 caracteres.';
+      } else if (err.message.includes('Invalid email')) {
+        errorMessage = 'Email inválido.';
+      }
+      
+      toast({ 
+        title: 'Erro no cadastro', 
+        description: errorMessage, 
+        variant: 'destructive' 
+      });
     } finally {
       setLoading(false);
     }
   };
-
-  if (adminLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2">Verificando sistema...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">

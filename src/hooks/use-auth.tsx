@@ -2,13 +2,12 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User as FirebaseUser, onAuthStateChanged, signOut, getAuth } from 'firebase/auth';
-import { doc, getDoc, getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
-import { app } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 // Define o tipo para o objeto de usuário, incluindo a role
 interface User {
-  uid: string;
+  id: string;
   email: string | null;
   role: 'admin' | 'diretor' | 'user';
 }
@@ -27,57 +26,99 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!app) {
-      setLoading(false);
-      return;
-    }
-
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        try {
-          // Check if user has role in Firestore
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          let role: 'admin' | 'diretor' | 'user' = 'user';
-
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            role = userData.role || 'user';
-          } else {
-            // If no user document exists, check if user is admin by email
-            if (firebaseUser.email === 'admin@example.com' || firebaseUser.email === 'carlos.horst@doubletelecom.com.br') {
-              role = 'admin';
-            }
-          }
-
-          setUser({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            role: role
-          });
-        } catch (error) {
-          console.error('Error fetching user role:', error);
-          setUser({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            role: 'user'
-          });
+    // Get initial session
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+          setLoading(false);
+          return;
         }
+        
+        if (session?.user) {
+          await handleUserSession(session.user);
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Error in getInitialSession:', error);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getInitialSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await handleUserSession(session.user);
       } else {
         setUser(null);
       }
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
+  const handleUserSession = async (supabaseUser: SupabaseUser) => {
+    try {
+      // Check if user has role in Supabase users table
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', supabaseUser.id)
+        .single();
+
+      let role: 'admin' | 'diretor' | 'user' = 'user';
+
+      if (!error && userData) {
+        role = userData.role || 'user';
+      } else {
+        // If no user document exists, check if user is admin by email
+        if (supabaseUser.email === 'admin@example.com' || supabaseUser.email === 'carlos.horst@doubletelecom.com.br') {
+          role = 'admin';
+          
+          // Create user record with admin role
+          await supabase
+            .from('users')
+            .upsert({
+              id: supabaseUser.id,
+              email: supabaseUser.email,
+              role: 'admin'
+            });
+        }
+      }
+
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email,
+        role: role
+      });
+    } catch (error) {
+      console.error('Error fetching user role:', error);
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email,
+        role: 'user'
+      });
+    }
+  };
+
   const logout = async () => {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user_data');
-    setUser(null);
+    try {
+      await supabase.auth.signOut();
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user_data');
+      setUser(null);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   return (

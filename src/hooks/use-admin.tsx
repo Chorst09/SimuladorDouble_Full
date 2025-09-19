@@ -2,14 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from './use-auth';
-import { 
-  collection, 
-  getDocs, 
-  query, 
-  where,
-  getFirestore 
-} from 'firebase/firestore';
-import { app } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 
 export function useAdmin() {
   const { user } = useAuth();
@@ -22,26 +15,29 @@ export function useAdmin() {
   }, [user]);
 
   const checkAdminStatus = async () => {
-    if (!app) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      const db = getFirestore(app);
-      const usersCollection = collection(db, 'users');
-      
       // Check if any admin exists in the system
-      const adminQuery = query(usersCollection, where('role', '==', 'admin'));
-      const adminSnapshot = await getDocs(adminQuery);
+      const { data: adminUsers, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'admin')
+        .limit(1);
       
-      const hasAdmin = !adminSnapshot.empty;
-      setHasAnyAdmin(hasAdmin);
+      if (error) {
+        console.error('Erro ao verificar admins:', error);
+        setHasAnyAdmin(false);
+      } else {
+        const hasAdmin = adminUsers && adminUsers.length > 0;
+        setHasAnyAdmin(hasAdmin);
+      }
       
       // Check if current user is admin
       setIsAdmin(user?.role === 'admin');
       
-      console.log('Admin check result:', { hasAdmin, userRole: user?.role });
+      console.log('Admin check result:', { 
+        hasAdmin: adminUsers && adminUsers.length > 0, 
+        userRole: user?.role 
+      });
       
     } catch (error) {
       console.error('Erro ao verificar status de admin:', error);

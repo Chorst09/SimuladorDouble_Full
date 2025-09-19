@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import { app } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/use-auth';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -19,35 +19,66 @@ const LoginPage = () => {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
+
+  // Redirect if user is already logged in
+  useEffect(() => {
+    if (user && !authLoading) {
+      router.push('/');
+    }
+  }, [user, authLoading, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    if (!app) {
-      setError('Firebase não está configurado');
-      toast({ title: 'Erro no login', description: 'Serviço indisponível.', variant: 'destructive' });
-      setLoading(false);
-      return;
-    }
-
-    const auth = getAuth(app);
-
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({ title: 'Login bem-sucedido!', description: 'Você será redirecionado.' });
-      // Aguardar um pouco para o estado de auth atualizar
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 500);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.user) {
+        toast({ title: 'Login bem-sucedido!', description: 'Redirecionando...' });
+        // The useEffect will now handle the redirect automatically when the user state changes.
+      }
     } catch (err: any) {
+      console.error('Login error:', err);
       setError(err.message);
-      toast({ title: 'Erro no login', description: 'Verifique suas credenciais.', variant: 'destructive' });
+      
+      // Provide more user-friendly error messages
+      let errorMessage = 'Verifique suas credenciais.';
+      if (err.message.includes('Invalid login credentials')) {
+        errorMessage = 'Email ou senha incorretos.';
+      } else if (err.message.includes('Email not confirmed')) {
+        errorMessage = 'Por favor, confirme seu email antes de fazer login.';
+      } else if (err.message.includes('Too many requests')) {
+        errorMessage = 'Muitas tentativas. Tente novamente em alguns minutos.';
+      }
+      
+      toast({ 
+        title: 'Erro no login', 
+        description: errorMessage, 
+        variant: 'destructive' 
+      });
     } finally {
       setLoading(false);
     }
   };
+
+  // Render a loading state or null while checking auth to prevent flash of login page
+  if (authLoading || (user && !authLoading)) {
+    return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+            <p>Carregando...</p>
+        </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">

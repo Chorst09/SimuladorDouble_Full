@@ -2,25 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { 
-  collection, 
-  getDocs, 
-  doc, 
-  updateDoc, 
-  deleteDoc, 
-  addDoc,
-  getFirestore,
-  query,
-  where,
-  serverTimestamp
-} from 'firebase/firestore';
-import { 
-  createUserWithEmailAndPassword, 
-  getAuth, 
-  deleteUser,
-  fetchSignInMethodsForEmail
-} from 'firebase/auth';
-import { app } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
