@@ -1,7 +1,7 @@
 // src/hooks/use-auth.tsx
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
@@ -24,102 +24,138 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const handleUserSession = useCallback(async (supabaseUser: SupabaseUser) => {
-    try {
-      // Check if user has role in Supabase users table
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', supabaseUser.id)
-        .single();
-
-      let role: 'admin' | 'diretor' | 'user' = 'user';
-
-      if (!error && userData) {
-        role = userData.role || 'user';
-      } else {
-        // If no user document exists, check if user is admin by email
-        if (supabaseUser.email === 'admin@example.com' || supabaseUser.email === 'carlos.horst@doubletelecom.com.br') {
-          role = 'admin';
-          
-          // Create user record with admin role
-          await supabase
-            .from('users')
-            .upsert({
-              id: supabaseUser.id,
-              email: supabaseUser.email,
-              role: 'admin'
-            });
-        }
-      }
-
-      setUser({
-        id: supabaseUser.id,
-        email: supabaseUser.email,
-        role: role
-      });
-    } catch (error) {
-      console.error('Error fetching user role:', error);
-      setUser({
-        id: supabaseUser.id,
-        email: supabaseUser.email,
-        role: 'user'
-      });
-    }
-  }, []);
+  const [initialized, setInitialized] = useState(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    let mounted = true;
+    let authSubscription: any = null;
 
-    // Get initial session
-    const getInitialSession = async () => {
+    const initializeAuth = async () => {
       try {
+        console.log('🔄 Inicializando autenticação...');
+        
+        // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
+        
         if (error) {
-          console.error('Error getting session:', error);
-          if (mounted) {
+          console.error('❌ Erro ao obter sessão:', error);
+          if (mountedRef.current) {
+            setUser(null);
             setLoading(false);
+            setInitialized(true);
           }
           return;
         }
-        
-        if (session?.user && mounted) {
-          await handleUserSession(session.user);
-        } else if (mounted) {
+
+        console.log('📋 Sessão inicial:', session ? 'Encontrada' : 'Não encontrada');
+
+        if (session?.user && mountedRef.current) {
+          await processUser(session.user);
+        } else if (mountedRef.current) {
           setUser(null);
+        }
+
+        if (mountedRef.current) {
+          setLoading(false);
+          setInitialized(true);
+        }
+
+        // Setup auth state listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          console.log('🔔 Auth state change:', event, session ? 'User present' : 'No user');
+          
+          if (!mountedRef.current) return;
+
+          if (event === 'SIGNED_IN' && session?.user) {
+            await processUser(session.user);
+          } else if (event === 'SIGNED_OUT' || !session?.user) {
+            setUser(null);
+          }
+          
+          if (mountedRef.current) {
+            setLoading(false);
+          }
+        });
+
+        authSubscription = subscription;
+
+      } catch (error) {
+        console.error('❌ Erro na inicialização da auth:', error);
+        if (mountedRef.current) {
+          setUser(null);
+          setLoading(false);
+          setInitialized(true);
+        }
+      }
+    };
+
+    const processUser = async (supabaseUser: SupabaseUser) => {
+      try {
+        console.log('👤 Processando usuário:', supabaseUser.email);
+        
+        // Check if user has role in Supabase users table
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', supabaseUser.id)
+          .single();
+
+        let role: 'admin' | 'diretor' | 'user' = 'user';
+
+        if (!error && userData) {
+          role = userData.role || 'user';
+          console.log('✅ Role encontrada:', role);
+        } else {
+          console.log('⚠️ Usuário não encontrado na tabela users, verificando email...');
+          
+          // If no user document exists, check if user is admin by email
+          if (supabaseUser.email === 'admin@example.com' || supabaseUser.email === 'carlos.horst@doubletelecom.com.br') {
+            role = 'admin';
+            console.log('🔑 Email de admin detectado, criando registro...');
+            
+            // Create user record with admin role
+            await supabase
+              .from('users')
+              .upsert({
+                id: supabaseUser.id,
+                email: supabaseUser.email,
+                role: 'admin'
+              });
+          }
+        }
+
+        if (mountedRef.current) {
+          setUser({
+            id: supabaseUser.id,
+            email: supabaseUser.email,
+            role: role
+          });
+          console.log('✅ Usuário definido:', { email: supabaseUser.email, role });
         }
       } catch (error) {
-        console.error('Error in getInitialSession:', error);
-        if (mounted) {
-          setUser(null);
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
+        console.error('❌ Erro ao processar usuário:', error);
+        if (mountedRef.current) {
+          setUser({
+            id: supabaseUser.id,
+            email: supabaseUser.email,
+            role: 'user'
+          });
         }
       }
     };
 
-    getInitialSession();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      
-      if (session?.user) {
-        await handleUserSession(session.user);
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
+    // Only initialize once
+    if (!initialized) {
+      initializeAuth();
+    }
 
     return () => {
-      mounted = false;
-      subscription.unsubscribe();
+      mountedRef.current = false;
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
     };
-  }, [handleUserSession]);
+  }, [initialized]);
 
   const logout = async () => {
     try {

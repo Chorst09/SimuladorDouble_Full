@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import AuthDebug from '@/components/debug/AuthDebug';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -25,6 +26,7 @@ const LoginPage = () => {
   // Redirect if user is already logged in
   useEffect(() => {
     if (user && !authLoading) {
+      console.log('🔄 Usuário logado, redirecionando...');
       router.push('/');
     }
   }, [user, authLoading, router]);
@@ -84,6 +86,7 @@ const LoginPage = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
+      <AuthDebug />
       <Card className="w-[400px]">
         <CardHeader>
           <CardTitle className="text-2xl text-center">Acessar sua Conta</CardTitle>
