@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -71,13 +72,14 @@ const LoginPage = () => {
     }
   };
 
-  // Render a loading state or null while checking auth to prevent flash of login page
-  if (authLoading || (user && !authLoading)) {
-    return (
-        <div className="flex min-h-screen items-center justify-center bg-background">
-            <p>Carregando...</p>
-        </div>
-    );
+  // Show loading while checking authentication
+  if (authLoading) {
+    return <LoadingSpinner message="Verificando autenticação..." />;
+  }
+
+  // Redirect if user is already authenticated
+  if (user) {
+    return <LoadingSpinner message="Redirecionando..." />;
   }
 
   return (
